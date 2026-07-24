@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account and balance information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user" },
+        "phone": { "type": "string", "description": "Phone number of the user" },
+        "email": { "type": "string", "description": "Email address of the user" },
+        "balance": { "type": "number", "description": "Current wallet balance in Naira" },
+        "totalProfit": { "type": "number", "description": "Total profits made on sponsoring" },
+        "referralCode": { "type": "string", "description": "Unique referral code for inviting others" },
+        "referredBy": { "type": "string", "description": "Referral code of the user who invited this user" },
+        "joinedDate": { "type": "string", "description": "Date when user registered" },
+        "creditScore": { "type": "number", "description": "Current user credit rating out of 100" },
+        "currentTierId": { "type": "string", "description": "Active VIP level tier code" },
+        "bankName": { "type": "string", "description": "Bank name for withdrawals" },
+        "bankAccount": { "type": "string", "description": "Bank account number for withdrawals" },
+        "accountHolder": { "type": "string", "description": "Account holder name" }
+      },
+      "required": ["uid", "phone", "email", "balance", "totalProfit", "referralCode", "joinedDate", "creditScore", "currentTierId"]
+    },
+    "Transaction": {
+      "title": "Transaction Record",
+      "description": "Deposit and withdrawal transaction logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdraw"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "type", "amount", "status", "timestamp"]
+    },
+    "Investment": {
+      "title": "Fund Investment",
+      "description": "Active fixed yield fund lockups",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "planId": { "type": "string" },
+        "planName": { "type": "string" },
+        "amountInvested": { "type": "number" },
+        "dailyInterestRate": { "type": "number" },
+        "durationDays": { "type": "number" },
+        "daysRemaining": { "type": "number" },
+        "accumulatedProfit": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed"] }
+      },
+      "required": ["id", "planId", "planName", "amountInvested", "dailyInterestRate", "durationDays", "daysRemaining", "accumulatedProfit", "startDate", "endDate", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Main user collection"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Sub-collection tracking deposit and cashout logs"
+    },
+    "/users/{userId}/investments/{investmentId}": {
+      "schema": "Investment",
+      "description": "Sub-collection tracking fixed maturity mobility investments"
+    }
+  }
+}

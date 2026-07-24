@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Careem Invest",
+  "description": "An institutional-grade investment portal and strategic growth division for Careem, allowing partners and retail investors to power the future of the Middle East\u0027s leading Super-App.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

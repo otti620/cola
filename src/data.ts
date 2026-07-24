@@ -1,0 +1,150 @@
+import { InvestmentTier, CareemTask, CareemNewsItem, EducationalResource } from "./types";
+import { COCA_COLA_BRAND_ASSETS } from "./data/brandImages";
+
+export const INVESTMENT_TIERS: InvestmentTier[] = [
+  {
+    id: "t1",
+    name: "Plan 1 - Classic Glass Contour",
+    price: 4000,
+    dailyTasksCount: 1,
+    dailyReward: 1000,
+    monthlyReward: 30000,
+    yearlyReward: 365000,
+    region: "Ibadan Bottling Plant",
+    description: "Consistent branding & daily dividend yield on iconic glass contour bottle sales.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.consistentBranding.url
+  },
+  {
+    id: "t2",
+    name: "Plan 2 - Multi-Pack Distribution",
+    price: 8000,
+    dailyTasksCount: 1,
+    dailyReward: 2060,
+    monthlyReward: 61800,
+    yearlyReward: 751900,
+    region: "Kano Commercial Hub",
+    description: "Iconic inside, timeless outside. Sponsor 24-can crates & multi-pack retail inventory.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.productPortfolioMatrix.url
+  },
+  {
+    id: "t3",
+    name: "Plan 3 - Effervescent Fizz Growth",
+    price: 18000,
+    dailyTasksCount: 1,
+    dailyReward: 4700,
+    monthlyReward: 141000,
+    yearlyReward: 1715500,
+    region: "Benue Bottling Belt",
+    description: "Open happiness & instant daily yield cashflow backed by high-velocity carbonated beverage output.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.fizzSplashHappiness.url
+  },
+  {
+    id: "t4",
+    name: "Plan 4 - Real Magic Global Network",
+    price: 40000,
+    dailyTasksCount: 1,
+    dailyReward: 10800,
+    monthlyReward: 324000,
+    yearlyReward: 3942000,
+    region: "Ogun Industrial Zone",
+    description: "Pan-African billboard and retail distribution network equity participation.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.realMagicCollage.url
+  },
+  {
+    id: "t5",
+    name: "Plan 5 - Enterprise Facility Cube",
+    price: 90000,
+    dailyTasksCount: 1,
+    dailyReward: 25000,
+    monthlyReward: 750000,
+    yearlyReward: 9125000,
+    region: "Abuja Enterprise Hub",
+    description: "Direct asset sponsorship in modern 3D automated logistics and corporate distribution centers.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.architecturalCube.url
+  },
+  {
+    id: "t6",
+    name: "Plan 6 - Food Service & Retail Yield",
+    price: 200000,
+    dailyTasksCount: 1,
+    dailyReward: 58000,
+    monthlyReward: 1740000,
+    yearlyReward: 21170000,
+    region: "Kaduna Mega Logistics Hub",
+    description: "High-volume food pairing and restaurant supply chain contract yields.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.mealSignage.url
+  },
+  {
+    id: "t7",
+    name: "Plan 7 - Pan-African Bottling Syndicate",
+    price: 450000,
+    dailyTasksCount: 1,
+    dailyReward: 135000,
+    monthlyReward: 4050000,
+    yearlyReward: 49275000,
+    region: "Pan-African Bottling Network",
+    description: "Institutional equity in automated high-speed canning and recycling plants.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.productPortfolioMatrix.url
+  },
+  {
+    id: "t8",
+    name: "Plan 8 - Global Logistics Infrastructure",
+    price: 1000000,
+    dailyTasksCount: 1,
+    dailyReward: 310000,
+    monthlyReward: 9300000,
+    yearlyReward: 113150000,
+    region: "Lagos Port Industrial Complex",
+    description: "Mega-tier institutional investment in continental shipping, storage, and automated retail supply.",
+    durationDays: 100,
+    imageUrl: COCA_COLA_BRAND_ASSETS.realMagicCollage.url
+  }
+];
+
+export const CAREEM_TASKS: CareemTask[] = [
+  {
+    id: "task_1",
+    title: "Verify Seed Quality Dispatch",
+    category: "operations",
+    description: "Audit genetic seed purity batch certification for regional distribution.",
+    reward: 10,
+    durationSeconds: 5
+  },
+  {
+    id: "task_2",
+    title: "Approve Cassava Harvest Output",
+    category: "operations",
+    description: "Confirm cassava starch yields and moisture levels before transport.",
+    reward: 15,
+    durationSeconds: 5
+  }
+];
+
+export const CAREEM_NEWS: CareemNewsItem[] = [
+  {
+    id: "news_1",
+    title: "IITA Expands High-Yield Maize & Cassava Investment Program",
+    summary: "African farmers and investors receive daily automated dividend returns.",
+    content: "IITA is proud to introduce direct public participation in agricultural technology. High-yielding cassava, maize, and soybean projects empower investors with steady 100-day cycles.",
+    date: "2026-07-20",
+    category: "IITA Official"
+  }
+];
+
+export const EDUCATIONAL_RESOURCES: EducationalResource[] = [
+  {
+    id: "edu_1",
+    title: "How IITA Agricultural Plans Work",
+    category: "How to Start",
+    summary: "Select a plan, recharge your balance, and earn guaranteed daily crop returns.",
+    content: "Choose any plan from Plan 1 to Plan 8 according to your budget. Recharge via bank channel and receive daily income straight to your balance for 100 days."
+  }
+];
+
