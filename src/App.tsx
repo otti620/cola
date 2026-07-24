@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Home, Store, Users, User, ShieldAlert, ShieldCheck, 
   CreditCard, Lock, HelpCircle, PhoneCall, PiggyBank 
@@ -11,7 +11,6 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 import AuthModal from "./components/AuthModal";
-import Navbar from "./components/Navbar";
 import HomeTab from "./components/HomeTab";
 import TaskTab from "./components/TaskTab";
 import VipTab from "./components/VipTab";
@@ -20,8 +19,9 @@ import TeamTab from "./components/TeamTab";
 import MineTab from "./components/MineTab";
 import AdminPanel from "./components/AdminPanel";
 import ChatFAB from "./components/ChatFAB";
-
-import coolingStationImg from "./assets/images/cooling_station_1783296269905.jpg";
+import AppSkeletonLoader from "./components/AppSkeletonLoader";
+import ToastContainer, { ToastItem } from "./components/ToastContainer";
+import { notifyToast } from "./utils/toast";
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -29,6 +29,33 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("home");
   const [showTelegramModal, setShowTelegramModal] = useState(false);
   const [mineActiveView, setMineActiveView] = useState<"none" | "deposit" | "withdraw" | "fund">("none");
+
+  // Toast Notification System state
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = useCallback((toastData: Omit<ToastItem, "id"> & { id?: string }) => {
+    const newToast: ToastItem = {
+      id: toastData.id || "toast_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      ...toastData
+    };
+    setToasts((prev) => [newToast, ...prev].slice(0, 4));
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Listen for custom window toast events
+  useEffect(() => {
+    const handleToastEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        addToast(detail);
+      }
+    };
+    window.addEventListener("show-toast", handleToastEvent);
+    return () => window.removeEventListener("show-toast", handleToastEvent);
+  }, [addToast]);
 
   const isUserAdmin = (phone?: string) => {
     if (!phone) return false;
@@ -47,76 +74,114 @@ export default function App() {
   useEffect(() => {
     setLoading(true);
     let unsubscribeFirestore: (() => void) | null = null;
+    let unsubscribeAuth: (() => void) | null = null;
     
     // Telegram Modal logic
     if (activeTab === "home") {
         setShowTelegramModal(true);
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Load initial cached user from localStorage for instant display
+    const cachedUserRaw = localStorage.getItem("cocacola_invest_user");
+    if (cachedUserRaw) {
       try {
-        if (firebaseUser) {
-          // Listen to Firestore for real-time user updates
-          const userRef = doc(db, "users", firebaseUser.uid);
-          
-          // Initial fetch attempt
+        const cachedUser = JSON.parse(cachedUserRaw);
+        setUser(cachedUser);
+      } catch (e) {
+        console.warn("Cached user parse error:", e);
+      }
+    }
+
+    try {
+      unsubscribeAuth = onAuthStateChanged(
+        auth,
+        async (firebaseUser) => {
           try {
-            const snap = await getDoc(userRef);
-            if (snap.exists()) {
-              setUser(snap.data() as UserProfile);
+            if (firebaseUser) {
+              const userRef = doc(db, "users", firebaseUser.uid);
+              try {
+                const snap = await getDoc(userRef);
+                if (snap.exists()) {
+                  const data = snap.data() as UserProfile;
+                  setUser(data);
+                  localStorage.setItem("cocacola_invest_user", JSON.stringify(data));
+                }
+              } catch (e) {
+                console.warn("Initial getDoc failed, using local user state:", e);
+              } finally {
+                setLoading(false);
+              }
+
+              unsubscribeFirestore = onSnapshot(userRef, (docSnap) => {
+                if (docSnap.exists()) {
+                  const data = docSnap.data() as UserProfile;
+                  setUser(data);
+                  localStorage.setItem("cocacola_invest_user", JSON.stringify(data));
+                }
+                setLoading(false);
+              }, (err) => {
+                console.warn("Firestore snapshot error:", err);
+                setLoading(false);
+              });
+            } else {
+              // Check if a local user exists in localStorage
+              const savedUser = localStorage.getItem("cocacola_invest_user");
+              if (savedUser) {
+                try {
+                  setUser(JSON.parse(savedUser));
+                } catch (e) {
+                  setUser(null);
+                }
+              } else {
+                setUser(null);
+              }
+              if (unsubscribeFirestore) unsubscribeFirestore();
+              setLoading(false);
             }
-          } catch (e) {
-            console.error("Initial getDoc failed:", e);
-          } finally {
+          } catch (err) {
+            console.warn("Auth state change handler error:", err);
             setLoading(false);
           }
-
-          unsubscribeFirestore = onSnapshot(userRef, (docSnap) => {
-            if (docSnap.exists()) {
-              setUser(docSnap.data() as UserProfile);
+        },
+        (authError) => {
+          console.warn("Firebase Auth listener notice (using local session):", authError);
+          const savedUser = localStorage.getItem("cocacola_invest_user");
+          if (savedUser) {
+            try {
+              setUser(JSON.parse(savedUser));
+            } catch (e) {
+              setUser(null);
             }
-            setLoading(false);
-          }, (err) => {
-            console.error("Firestore snapshot error:", err);
-            setLoading(false);
-          });
-
-          // Safety timeout
-          const timer = setTimeout(() => {
-            setLoading(false);
-          }, 5000);
-          return () => clearTimeout(timer);
-        } else {
-          setUser(null);
-          if (unsubscribeFirestore) unsubscribeFirestore();
+          } else {
+            setUser(null);
+          }
           setLoading(false);
         }
-      } catch (err) {
-        console.error("Auth state change handler error:", err);
-        setLoading(false);
-      }
-    });
+      );
+    } catch (err) {
+      console.warn("Auth listener subscription error:", err);
+      setLoading(false);
+    }
 
     return () => {
-      unsubscribeAuth();
+      if (unsubscribeAuth) unsubscribeAuth();
       if (unsubscribeFirestore) unsubscribeFirestore();
     };
   }, []);
 
-  // Update user profile in Firestore
+  // Update user profile in Firestore and localStorage
   const handleUpdateUser = async (updatedUser: UserProfile) => {
+    // Always update local state & localStorage immediately
+    setUser(updatedUser);
+    localStorage.setItem("cocacola_invest_user", JSON.stringify(updatedUser));
+
     try {
       const targetUid = updatedUser.uid || auth.currentUser?.uid;
       if (!targetUid) return;
       const userRef = doc(db, "users", targetUid);
       await setDoc(userRef, updatedUser, { merge: true });
-      
-      // If we updated the currently logged-in user, also update local state to trigger immediate re-render
-      if (auth.currentUser && targetUid === auth.currentUser.uid) {
-        setUser(updatedUser);
-      }
     } catch (error) {
-      console.error("Error updating user profile:", error);
+      console.warn("Firestore user profile update notice (saved locally):", error);
     }
   };
 
@@ -140,6 +205,14 @@ export default function App() {
 
     handleUpdateUser(updatedUser);
 
+    // Alert user via Toast Notification that profit dropped!
+    notifyToast({
+      title: "🎉 Daily Profit Dropped!",
+      message: `₦${reward.toLocaleString()} has been credited to your balance from ${matchedTier.name}.`,
+      type: "profit",
+      amount: reward
+    });
+
     try {
       const transRef = collection(db, "users", user.uid, "transactions");
       addDoc(transRef, {
@@ -155,12 +228,78 @@ export default function App() {
     }
   }, [user?.uid, user?.currentTierId, user?.lastTaskDate]);
 
+  // Real-time listener for transaction status changes (e.g. Admin approvals/declines)
+  const prevTxMapRef = useRef<Record<string, string>>({});
+  const isFirstTxLoadRef = useRef(true);
+
+  useEffect(() => {
+    if (!user || !user.uid) return;
+
+    isFirstTxLoadRef.current = true;
+    prevTxMapRef.current = {};
+
+    let unsubTx: (() => void) | null = null;
+    try {
+      const txCol = collection(db, "users", user.uid, "transactions");
+      unsubTx = onSnapshot(txCol, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          const txData = change.doc.data();
+          const txId = change.doc.id;
+          const currentStatus = txData.status;
+
+          // On initial load, record current status without showing old toasts
+          if (isFirstTxLoadRef.current) {
+            prevTxMapRef.current[txId] = currentStatus;
+            return;
+          }
+
+          const prevStatus = prevTxMapRef.current[txId];
+          if (prevStatus && prevStatus !== currentStatus) {
+            const amountFormatted = Number(txData.amount || 0).toLocaleString();
+            const isDeposit = txData.type === "deposit";
+            const txTypeName = isDeposit ? "Deposit" : "Withdrawal";
+
+            if (currentStatus === "approved") {
+              notifyToast({
+                title: `✅ ${txTypeName} Approved by Admin`,
+                message: isDeposit
+                  ? `Your deposit of ₦${amountFormatted} was approved and credited to your balance!`
+                  : `Your withdrawal request of ₦${amountFormatted} was approved and sent to your bank account!`,
+                type: "success",
+                amount: Number(txData.amount || 0)
+              });
+            } else if (currentStatus === "declined" || currentStatus === "rejected") {
+              notifyToast({
+                title: `❌ ${txTypeName} Request Declined`,
+                message: `Your ${txTypeName.toLowerCase()} request of ₦${amountFormatted} was declined by system admin.`,
+                type: "error"
+              });
+            }
+          }
+
+          prevTxMapRef.current[txId] = currentStatus;
+        });
+
+        isFirstTxLoadRef.current = false;
+      }, (err) => {
+        console.warn("User transactions snapshot notice:", err);
+      });
+    } catch (err) {
+      console.warn("User transactions snapshot error:", err);
+    }
+
+    return () => {
+      if (unsubTx) unsubTx();
+    };
+  }, [user?.uid]);
+
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
   };
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem("cocacola_invest_user");
       await signOut(auth);
       setUser(null);
       setActiveTab("home");
@@ -176,31 +315,7 @@ export default function App() {
   }, [activeTab]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden font-sans">
-        {/* Highly visible background image */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-105"
-          style={{ backgroundImage: `url(${coolingStationImg})` }}
-        />
-        {/* Semi-transparent dark overlay to protect text readability */}
-        <div className="absolute inset-0 bg-slate-950/60" />
-        
-        {/* Centered Glassmorphic Loading Box */}
-        <div className="relative z-10 bg-slate-900/75 border border-white/10 backdrop-blur-md rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center space-y-6">
-          <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
-            <div className="absolute inset-0 border border-[#e41e2b]/20 rounded-full animate-ping" />
-            <div className="w-12 h-12 border-4 border-[#e41e2b] border-t-transparent rounded-full animate-spin" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-white font-extrabold text-base tracking-tight uppercase font-display">Coca-Cola Inc.</h3>
-            <p className="text-[#e41e2b] font-mono text-[10px] uppercase tracking-widest font-bold animate-pulse">
-              Initializing Partner Portal...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return <AppSkeletonLoader />;
   }
 
   // If user is not logged in, show secure onboarding auth modal
@@ -275,19 +390,11 @@ export default function App() {
       <div className="absolute top-[-250px] right-[-200px] w-[600px] h-[600px] bg-[#e41e2b]/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-[#e41e2b]/5 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Main Header / Navbar */}
-      <Navbar 
-        user={user}
-        onLogout={handleLogout}
-        onNavigateToTab={(tab) => setActiveTab(tab)}
-        onNavigateToMineView={(view) => {
-          setMineActiveView(view);
-          setActiveTab("mine");
-        }}
-      />
+      {/* Floating Toast Notification System */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full mx-auto py-8 relative z-10 ${
+      <main className={`flex-1 w-full mx-auto py-3 relative z-10 ${
         activeTab === "mine" || activeTab === "vip" ? "px-0 sm:px-4 md:px-8 max-w-none" : "max-w-7xl px-4"
       }`}>
         

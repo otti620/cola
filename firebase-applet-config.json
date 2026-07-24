@@ -1,9 +1,12 @@
 {
-  "projectId": "remixed-project-id",
-  "appId": "remixed-app-id",
-  "apiKey": "remixed-api-key",
-  "authDomain": "remixed-auth-domain",
-  "storageBucket": "remixed-storage-bucket",
-  "messagingSenderId": "remixed-messaging-sender-id",
-  "measurementId": "remixed-measurement-id"
+  "projectId": "seedstreet-app",
+  "appId": "1:92688661776:web:9cc5e5ea716d380070b995",
+  "apiKey": "AIzaSyBewBW-Z9P5HtcUTsLvmEn0aZtBjwvD68I",
+  "authDomain": "seedstreet-app.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-remixcareeminves-769445ac-2366-4b04-ae5c-598a6b6eb608",
+  "storageBucket": "seedstreet-app.firebasestorage.app",
+  "messagingSenderId": "92688661776",
+  "measurementId": "",
+  "oAuthClientId": "92688661776-gujvg1f95jlbkoslug9bvvqb4kblev4m.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

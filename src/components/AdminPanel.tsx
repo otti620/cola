@@ -11,6 +11,7 @@ import {
   collection, doc, updateDoc, onSnapshot, getDoc, getDocs, 
   setDoc, addDoc, query, where, orderBy, deleteDoc, serverTimestamp 
 } from "firebase/firestore";
+import { notifyToast } from "../utils/toast";
 
 interface AdminPanelProps {
   user: UserProfile;
@@ -280,6 +281,12 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
         }
       }
       toast(`Approved ₦${(tx.amount || 0).toLocaleString()} for ${tx.userPhone}`);
+      notifyToast({
+        title: `✅ Approved ${tx.type === "deposit" ? "Deposit" : "Withdrawal"}`,
+        message: `Status updated for ${tx.userPhone} (₦${Number(tx.amount || 0).toLocaleString()})`,
+        type: "success",
+        amount: Number(tx.amount || 0)
+      });
     } catch (e) {
       console.error("Approve tx error:", e);
       alert("Failed to approve transaction: " + (e as Error).message);
@@ -302,6 +309,11 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
         }
       }
       toast(`Declined request for ${tx.userPhone}`);
+      notifyToast({
+        title: `❌ Declined ${tx.type === "deposit" ? "Deposit" : "Withdrawal"}`,
+        message: `Transaction request for ${tx.userPhone} (₦${Number(tx.amount || 0).toLocaleString()}) was declined.`,
+        type: "error"
+      });
     } catch (e) {
       console.error("Decline tx error:", e);
       alert("Failed to decline transaction: " + (e as Error).message);

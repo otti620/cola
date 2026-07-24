@@ -108,43 +108,9 @@ export const INVESTMENT_TIERS: InvestmentTier[] = [
   }
 ];
 
-export const CAREEM_TASKS: CareemTask[] = [
-  {
-    id: "task_1",
-    title: "Verify Seed Quality Dispatch",
-    category: "operations",
-    description: "Audit genetic seed purity batch certification for regional distribution.",
-    reward: 10,
-    durationSeconds: 5
-  },
-  {
-    id: "task_2",
-    title: "Approve Cassava Harvest Output",
-    category: "operations",
-    description: "Confirm cassava starch yields and moisture levels before transport.",
-    reward: 15,
-    durationSeconds: 5
-  }
-];
+export const CAREEM_TASKS: CareemTask[] = [];
 
-export const CAREEM_NEWS: CareemNewsItem[] = [
-  {
-    id: "news_1",
-    title: "IITA Expands High-Yield Maize & Cassava Investment Program",
-    summary: "African farmers and investors receive daily automated dividend returns.",
-    content: "IITA is proud to introduce direct public participation in agricultural technology. High-yielding cassava, maize, and soybean projects empower investors with steady 100-day cycles.",
-    date: "2026-07-20",
-    category: "IITA Official"
-  }
-];
+export const CAREEM_NEWS: CareemNewsItem[] = [];
 
-export const EDUCATIONAL_RESOURCES: EducationalResource[] = [
-  {
-    id: "edu_1",
-    title: "How IITA Agricultural Plans Work",
-    category: "How to Start",
-    summary: "Select a plan, recharge your balance, and earn guaranteed daily crop returns.",
-    content: "Choose any plan from Plan 1 to Plan 8 according to your budget. Recharge via bank channel and receive daily income straight to your balance for 100 days."
-  }
-];
+export const EDUCATIONAL_RESOURCES: EducationalResource[] = [];
 

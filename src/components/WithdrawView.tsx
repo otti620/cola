@@ -6,6 +6,7 @@ import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
 import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { NIGERIAN_BANKS, predictBankFromNuban, resolveNubanAccount, BankInfo } from "../utils/nuban";
+import { notifyToast } from "../utils/toast";
 
 interface WithdrawViewProps {
   user: UserProfile;
@@ -161,6 +162,12 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
       }
 
       setWithdrawalSuccess(true);
+      notifyToast({
+        title: "⏳ Withdrawal Requested",
+        message: `Your request for ₦${amt.toLocaleString()} has been submitted for admin processing.`,
+        type: "info",
+        amount: amt
+      });
     } catch (err) {
       console.error("Withdrawal error:", err);
       setErrorMessage("Withdrawal failed. Please check your network connection.");

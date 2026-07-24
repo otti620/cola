@@ -5,6 +5,7 @@ import {
 import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { notifyToast } from "../utils/toast";
 
 interface RechargeViewProps {
   user: UserProfile;
@@ -246,11 +247,23 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
         setSubmittingDeposit(false);
         setIsAutoDetecting(false);
         setDepositSuccess(true);
+        notifyToast({
+          title: "⏳ Deposit Submitted",
+          message: `Your deposit request of ₦${selectedAmount.toLocaleString()} has been sent to admin for verification.`,
+          type: "info",
+          amount: selectedAmount
+        });
       } catch (err) {
         console.error("Deposit submission error:", err);
         setSubmittingDeposit(false);
         setIsAutoDetecting(false);
         setDepositSuccess(true);
+        notifyToast({
+          title: "⏳ Deposit Submitted",
+          message: `Your deposit request of ₦${selectedAmount.toLocaleString()} has been submitted for admin review.`,
+          type: "info",
+          amount: selectedAmount
+        });
       }
     }, 3800);
   };

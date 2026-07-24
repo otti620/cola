@@ -56,81 +56,109 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
 
     const cleanPhone = phone.trim().replace(/^0/, "");
     const fullPhone = `+234${cleanPhone}`;
-    const derivedEmail = `${cleanPhone}@cocacola.com`;
+    const derivedEmail = `${cleanPhone}@careem-invest.com`;
 
     setLoading(true);
     try {
       if (isLogin) {
-        const q = query(collection(db, "users"), where("phone", "==", fullPhone));
-        const qSnap = await getDocs(q);
-        let firestorePassword = password;
-        let firestoreOldPassword = "";
-        let firestoreUserData: UserProfile | null = null;
-
-        if (!qSnap.empty) {
-          const uDoc = qSnap.docs[0];
-          firestoreUserData = uDoc.data() as UserProfile;
-          if (firestoreUserData.password) {
-            firestorePassword = firestoreUserData.password;
-          }
-          if (firestoreUserData.oldPassword) {
-            firestoreOldPassword = firestoreUserData.oldPassword;
-          }
-        }
-
+        // Sign In Flow
         let userCredential;
-        let needsPasswordSync = false;
-
         try {
           userCredential = await signInWithEmailAndPassword(auth, derivedEmail, password);
-        } catch (err: any) {
-          if (
-            (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") &&
-            firestoreUserData &&
-            password === firestorePassword &&
-            firestoreOldPassword &&
-            firestoreOldPassword !== password
-          ) {
-            try {
-              userCredential = await signInWithEmailAndPassword(auth, derivedEmail, firestoreOldPassword);
-              needsPasswordSync = true;
-            } catch (innerErr) {
-              throw err;
-            }
+        } catch (authErr: any) {
+          console.error("Firebase Sign In error:", authErr);
+          const code = authErr.code || "";
+          if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+            setError("Invalid phone number or password. If you don't have an account, please Sign Up.");
+          } else if (code === "auth/too-many-requests") {
+            setError("Too many login attempts. Please try again in a few minutes.");
           } else {
-            throw err;
+            setError("Account not found or password incorrect. Please sign up or check your details.");
           }
+          setLoading(false);
+          return;
         }
 
         const uid = userCredential.user.uid;
         const userRef = doc(db, "users", uid);
+        let loggedInUser: UserProfile | null = null;
 
-        if (needsPasswordSync && auth.currentUser) {
-          try {
-            await updatePassword(auth.currentUser, password);
-            await updateDoc(userRef, { oldPassword: password, password: password });
-          } catch (syncErr) {
-            console.error("Sync password error:", syncErr);
+        try {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            loggedInUser = userSnap.data() as UserProfile;
+          } else {
+            // Create profile in Firestore if absent
+            loggedInUser = {
+              uid,
+              phone: fullPhone,
+              email: derivedEmail,
+              fullName: `Investor Partner ${cleanPhone.slice(-4)}`,
+              balance: 1100,
+              totalProfit: 0,
+              referralCode: "COCA_" + Math.random().toString(36).substring(2, 7).toUpperCase(),
+              joinedDate: new Date().toLocaleDateString("en-NG", { year: 'numeric', month: 'short', day: 'numeric' }),
+              creditScore: 100,
+              currentTierId: "",
+              gameOpportunities: 0,
+              password: password
+            };
+            await setDoc(userRef, loggedInUser);
           }
-        } else {
-          await updateDoc(userRef, { password: password });
+        } catch (dbErr) {
+          console.error("Firestore fetch error on sign in:", dbErr);
         }
 
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          onSuccess(userSnap.data() as UserProfile);
-        } else {
-          setError("User profile not found.");
+        if (!loggedInUser) {
+          loggedInUser = {
+            uid,
+            phone: fullPhone,
+            email: derivedEmail,
+            fullName: `Investor Partner ${cleanPhone.slice(-4)}`,
+            balance: 1100,
+            totalProfit: 0,
+            referralCode: "COCA_" + Math.random().toString(36).substring(2, 7).toUpperCase(),
+            joinedDate: new Date().toLocaleDateString("en-NG", { year: 'numeric', month: 'short', day: 'numeric' }),
+            creditScore: 100,
+            currentTierId: "",
+            gameOpportunities: 0,
+            password: password
+          };
         }
+
+        localStorage.setItem("cocacola_invest_user", JSON.stringify(loggedInUser));
+        onSuccess(loggedInUser);
+
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, derivedEmail, password);
-        const uid = userCredential.user.uid;
+        // Sign Up Flow
+        let userCredential;
+        try {
+          userCredential = await createUserWithEmailAndPassword(auth, derivedEmail, password);
+        } catch (createErr: any) {
+          console.error("Firebase Sign Up error:", createErr);
+          const code = createErr.code || "";
+          if (code === "auth/email-already-in-use") {
+            setError("This phone number is already registered. Please switch to Sign In.");
+            setLoading(false);
+            return;
+          } else if (code === "auth/weak-password") {
+            setError("Password is too weak. Please use at least 6 characters.");
+            setLoading(false);
+            return;
+          } else {
+            // If email format fails or other auth error
+            setError("Failed to create account. " + (createErr.message || "Please check your phone number."));
+            setLoading(false);
+            return;
+          }
+        }
 
+        const uid = userCredential.user.uid;
         const newUser: UserProfile = {
           uid,
           phone: fullPhone,
           email: derivedEmail,
-          fullName: `Coca-Cola Member ${cleanPhone.slice(-4)}`,
+          fullName: `Investor Partner ${cleanPhone.slice(-4)}`,
           balance: 1100, // ₦1,100 registration bonus
           totalProfit: 0,
           referralCode: "COCA_" + Math.random().toString(36).substring(2, 7).toUpperCase(),
@@ -143,18 +171,37 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           oldPassword: password
         };
 
-        await setDoc(doc(db, "users", uid), newUser);
+        try {
+          await setDoc(doc(db, "users", uid), newUser);
+        } catch (setErr) {
+          console.error("Firestore write user document error:", setErr);
+        }
+
+        // Handle referral bonus if valid referral code was provided
+        if (inviteCode) {
+          try {
+            const refQuery = query(collection(db, "users"), where("referralCode", "==", inviteCode.trim()));
+            const refSnap = await getDocs(refQuery);
+            if (!refSnap.empty) {
+              const referrerDoc = refSnap.docs[0];
+              const refData = referrerDoc.data() as UserProfile;
+              const refBonus = 200;
+              await updateDoc(doc(db, "users", referrerDoc.id), {
+                balance: (refData.balance || 0) + refBonus,
+                totalProfit: (refData.totalProfit || 0) + refBonus
+              });
+            }
+          } catch (e) {
+            console.warn("Referral credit error:", e);
+          }
+        }
+
+        localStorage.setItem("cocacola_invest_user", JSON.stringify(newUser));
         onSuccess(newUser);
       }
     } catch (err: any) {
-      console.error("Auth error:", err);
-      let msg = "Authentication failed. Please try again.";
-      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
-        msg = isLogin ? "Invalid phone number or password." : "Error creating account.";
-      } else if (err.code === "auth/email-already-in-use") {
-        msg = "This phone number is already registered. Please sign in.";
-      }
-      setError(msg);
+      console.error("General Auth error:", err);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

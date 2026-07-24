@@ -4,6 +4,7 @@ import { UserProfile } from "../types";
 import { INVESTMENT_TIERS } from "../data";
 import { db, auth } from "../lib/firebase";
 import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { notifyToast } from "../utils/toast";
 
 interface TaskTabProps {
   user: UserProfile;
@@ -63,7 +64,12 @@ export default function TaskTab({ user, onUpdateUser, onNavigateToTab }: TaskTab
       });
 
       onUpdateUser(updatedUser);
-      alert(`Profit claimed! Earned ₦${dailyProfit.toFixed(2)}`);
+      notifyToast({
+        title: "🎉 Daily Profit Claimed!",
+        message: `Earned ₦${dailyProfit.toLocaleString()} from ${currentTier?.name || "Product Package"}.`,
+        type: "profit",
+        amount: dailyProfit
+      });
     } catch (error) {
       console.error(error);
       alert("Error claiming profit.");

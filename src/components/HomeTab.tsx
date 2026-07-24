@@ -34,17 +34,16 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
   const [showPitchDeckModal, setShowPitchDeckModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Live purchases ticker list
-  const liveTickerItems = [
-    "***2820 purchased ₦90,000",
-    "***8104 purchased ₦18,000",
-    "***3951 purchased ₦40,000",
-    "***0294 purchased ₦3,000",
-    "***7182 purchased ₦123,600",
-    "***9410 purchased ₦200,000",
-    "***5531 purchased ₦8,000",
-    "***6029 purchased ₦450,000"
-  ];
+  // Live activity ticker based on real user session
+  const liveTickerItems = (user.totalProfit > 0 || user.balance > 0)
+    ? [
+        `Partner ***${(user.phone || "0000").slice(-4)} active session online`,
+        `Wallet balance: ₦${(user.balance || 0).toLocaleString()}`,
+        `Total returns earned: ₦${(user.totalProfit || 0).toLocaleString()}`
+      ]
+    : [
+        "System online - Ready for deposit and product package selection"
+      ];
 
   useEffect(() => {
     const timer = setInterval(() => {
