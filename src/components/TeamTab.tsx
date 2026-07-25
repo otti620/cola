@@ -42,10 +42,21 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   const inviteCode = user.referralCode || "9JFXJX";
-  const origin = (typeof window !== "undefined" && window.location.origin && window.location.origin !== "null" && window.location.origin !== "about:blank")
-    ? window.location.origin
-    : "https://www.careem-invest.com";
-  const inviteLink = `${origin}/register?ref=${inviteCode}`;
+  
+  const getAppOrigin = () => {
+    if (typeof window === "undefined") return "";
+    const loc = window.location;
+    if (loc.origin && loc.origin !== "null" && loc.origin !== "about:blank" && !loc.origin.startsWith("file:")) {
+      return loc.origin;
+    }
+    if (loc.protocol && loc.host && !loc.host.includes("null") && !loc.host.includes("about:")) {
+      return `${loc.protocol}//${loc.host}`;
+    }
+    return loc.href.split("?")[0].split("#")[0].replace(/\/+$/, "");
+  };
+
+  const origin = getAppOrigin();
+  const inviteLink = `${origin}/?ref=${inviteCode}`;
 
   const copyToClipboard = async (text: string, label: string) => {
     await safeCopyToClipboard(text);
@@ -54,15 +65,13 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
   };
 
   const handleShare = async () => {
-    const validShareUrl = isValidAbsoluteUrl(inviteLink) 
-      ? inviteLink 
-      : `https://www.careem-invest.com/register?ref=${inviteCode}`;
+    const validShareUrl = inviteLink;
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Join Partner Investment Portal",
-          text: `Use my referral code ${inviteCode} to earn daily returns on sponsorship plans!`,
+          title: "Coca-Cola Real Magic Investment Portal",
+          text: `Join Coca-Cola Real Magic Investment! Use my referral code ${inviteCode} to earn high daily returns on sponsorship plans:`,
           url: validShareUrl,
         });
       } catch (err) {
@@ -765,7 +774,7 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
           
           <div className="flex items-center gap-2.5">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Join Partner Investment Platform! Registration link: ${inviteLink}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`Join Coca-Cola Real Magic Investment! Earn daily returns on sponsorship plans. Use code ${inviteCode} or register here: ${inviteLink}`)}`}
               target="_blank"
               rel="noreferrer"
               className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition"
@@ -775,7 +784,7 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
             </a>
 
             <a
-              href={`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent("Join Partner Investment Platform!")}`}
+              href={`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(`Join Coca-Cola Real Magic Investment! Use referral code: ${inviteCode}`)}`}
               target="_blank"
               rel="noreferrer"
               className="w-9 h-9 rounded-xl bg-sky-50 text-sky-500 hover:bg-sky-100 flex items-center justify-center transition"
@@ -795,7 +804,7 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
             </a>
 
             <a
-              href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent("Join Partner Investment Platform!")}`}
+              href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(`Join Coca-Cola Real Magic Investment! Use referral code: ${inviteCode}`)}`}
               target="_blank"
               rel="noreferrer"
               className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center transition"

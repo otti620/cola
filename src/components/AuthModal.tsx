@@ -28,11 +28,41 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const ref = params.get("ref");
-      if (ref) {
-        setInviteCode(ref);
+      let extractedRef: string | null = null;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        extractedRef = params.get("ref") || params.get("invite") || params.get("code") || params.get("referral");
+
+        if (!extractedRef && window.location.hash) {
+          const hashStr = window.location.hash;
+          const qIdx = hashStr.indexOf("?");
+          if (qIdx !== -1) {
+            const hashParams = new URLSearchParams(hashStr.substring(qIdx));
+            extractedRef = hashParams.get("ref") || hashParams.get("invite") || hashParams.get("code") || hashParams.get("referral");
+          }
+        }
+
+        if (!extractedRef) {
+          const match = window.location.href.match(/[?&](?:ref|invite|code|referral)=([a-zA-Z0-9_\-]+)/i);
+          if (match && match[1]) {
+            extractedRef = match[1];
+          }
+        }
+      } catch (e) {
+        console.warn("Error parsing referral URL in AuthModal:", e);
+      }
+
+      if (extractedRef) {
+        const cleanRef = extractedRef.trim().toUpperCase();
+        setInviteCode(cleanRef);
+        localStorage.setItem("pending_referral_code", cleanRef);
         setIsLogin(false);
+      } else {
+        const savedCode = localStorage.getItem("pending_referral_code");
+        if (savedCode) {
+          setInviteCode(savedCode.trim().toUpperCase());
+          setIsLogin(false);
+        }
       }
     }
   }, []);
@@ -162,7 +192,7 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           balance: 1100, // ₦1,100 registration bonus
           totalProfit: 0,
           referralCode: "COCA_" + Math.random().toString(36).substring(2, 7).toUpperCase(),
-          referredBy: inviteCode || null,
+          referredBy: (inviteCode || localStorage.getItem("pending_referral_code") || "").trim().toUpperCase() || null,
           joinedDate: new Date().toLocaleDateString("en-NG", { year: 'numeric', month: 'short', day: 'numeric' }),
           creditScore: 100,
           currentTierId: "",
@@ -178,10 +208,15 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
         }
 
         // Handle referral bonus if valid referral code was provided
-        if (inviteCode) {
+        const finalRefCode = (inviteCode || localStorage.getItem("pending_referral_code") || "").trim();
+        if (finalRefCode) {
           try {
-            const refQuery = query(collection(db, "users"), where("referralCode", "==", inviteCode.trim()));
-            const refSnap = await getDocs(refQuery);
+            let refQuery = query(collection(db, "users"), where("referralCode", "==", finalRefCode.toUpperCase()));
+            let refSnap = await getDocs(refQuery);
+            if (refSnap.empty) {
+              refQuery = query(collection(db, "users"), where("referralCode", "==", finalRefCode));
+              refSnap = await getDocs(refQuery);
+            }
             if (!refSnap.empty) {
               const referrerDoc = refSnap.docs[0];
               const refData = referrerDoc.data() as UserProfile;
@@ -193,6 +228,8 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
             }
           } catch (e) {
             console.warn("Referral credit error:", e);
+          } finally {
+            localStorage.removeItem("pending_referral_code");
           }
         }
 

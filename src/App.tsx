@@ -59,6 +59,44 @@ export default function App() {
     return () => window.removeEventListener("show-toast", handleToastEvent);
   }, [addToast]);
 
+  // Capture referral code from URL if present
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      let ref: string | null = null;
+      const params = new URLSearchParams(window.location.search);
+      ref = params.get("ref") || params.get("invite") || params.get("code") || params.get("referral");
+
+      if (!ref && window.location.hash) {
+        const hashStr = window.location.hash;
+        const qIdx = hashStr.indexOf("?");
+        if (qIdx !== -1) {
+          const hashParams = new URLSearchParams(hashStr.substring(qIdx));
+          ref = hashParams.get("ref") || hashParams.get("invite") || hashParams.get("code") || hashParams.get("referral");
+        }
+      }
+
+      if (!ref) {
+        const match = window.location.href.match(/[?&](?:ref|invite|code|referral)=([a-zA-Z0-9_\-]+)/i);
+        if (match && match[1]) {
+          ref = match[1];
+        }
+      }
+
+      if (ref) {
+        const cleanRef = ref.trim().toUpperCase();
+        localStorage.setItem("pending_referral_code", cleanRef);
+        addToast({
+          title: "Referral Link Active",
+          message: `Referral code ${cleanRef} captured! Sign up to join your partner's network.`,
+          type: "success"
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to extract referral parameter from URL:", e);
+    }
+  }, [addToast]);
+
   const isUserAdmin = (phone?: string) => {
     if (!phone) return false;
     const normalized = phone.replace(/[\s\-\(\)\+]/g, "");
