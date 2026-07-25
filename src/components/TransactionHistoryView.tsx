@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   History, ArrowDownCircle, ArrowUpCircle, Filter, 
   CheckCircle, Clock, AlertCircle, ArrowUpRight, ArrowDownLeft, 
-  Receipt, FileText, ChevronRight, RefreshCw
+  Receipt, FileText, ChevronRight, RefreshCw, Timer, ShieldAlert, Sparkles
 } from "lucide-react";
 import { TransactionRecord } from "../types";
+import OperationalRulesBanner from "./OperationalRulesBanner";
 
 interface TransactionHistoryViewProps {
   transactions: TransactionRecord[];
@@ -12,6 +13,61 @@ interface TransactionHistoryViewProps {
   onNavigateToDeposit?: () => void;
   onNavigateToWithdraw?: () => void;
   loading?: boolean;
+}
+
+// Helper to calculate West Africa Time (WAT, UTC+1) status & countdowns
+function getWATTimeDetails() {
+  const now = new Date();
+  const utcHours = now.getUTCHours();
+  const utcMinutes = now.getUTCMinutes();
+  const utcSeconds = now.getUTCSeconds();
+
+  const watHour = (utcHours + 1) % 24;
+  const currentTotalSec = watHour * 3600 + utcMinutes * 60 + utcSeconds;
+
+  const windowStartSec = 9 * 3600; // 09:00 AM
+  const windowEndSec = 16 * 3600;   // 04:00 PM
+  const totalWindowSec = windowEndSec - windowStartSec; // 7 hours (25200 sec)
+
+  const isOpen = watHour >= 9 && watHour < 16;
+
+  let windowProgress = 0;
+  let countdownText = "";
+  let statusText = "";
+
+  if (isOpen) {
+    const elapsedSec = currentTotalSec - windowStartSec;
+    windowProgress = Math.min(100, Math.max(0, Math.round((elapsedSec / totalWindowSec) * 100)));
+    
+    const secRemaining = windowEndSec - currentTotalSec;
+    const h = Math.floor(secRemaining / 3600);
+    const m = Math.floor((secRemaining % 3600) / 60);
+    const s = secRemaining % 60;
+    countdownText = `${h}h ${m}m ${s}s remaining`;
+    statusText = "Operational Window Active";
+  } else if (watHour < 9) {
+    windowProgress = 0;
+    const secRemaining = windowStartSec - currentTotalSec;
+    const h = Math.floor(secRemaining / 3600);
+    const m = Math.floor((secRemaining % 3600) / 60);
+    const s = secRemaining % 60;
+    countdownText = `Opens in ${h}h ${m}m ${s}s`;
+    statusText = "Window Closed (Opens at 09:00 AM)";
+  } else {
+    windowProgress = 100;
+    const secRemaining = (24 * 3600 - currentTotalSec) + windowStartSec;
+    const h = Math.floor(secRemaining / 3600);
+    const m = Math.floor((secRemaining % 3600) / 60);
+    const s = secRemaining % 60;
+    countdownText = `Opens tomorrow in ${h}h ${m}m ${s}s`;
+    statusText = "Window Closed for Today";
+  }
+
+  const ampmHour = watHour % 12 === 0 ? 12 : watHour % 12;
+  const ampm = watHour >= 12 ? "PM" : "AM";
+  const formattedTime = `${String(ampmHour).padStart(2, "0")}:${String(utcMinutes).padStart(2, "0")}:${String(utcSeconds).padStart(2, "0")} ${ampm} WAT`;
+
+  return { isOpen, windowProgress, countdownText, statusText, formattedTime };
 }
 
 export default function TransactionHistoryView({
@@ -22,6 +78,15 @@ export default function TransactionHistoryView({
   loading = false
 }: TransactionHistoryViewProps) {
   const [filter, setFilter] = useState<"all" | "deposit" | "withdraw">(initialFilter);
+  const [watInfo, setWatInfo] = useState(getWATTimeDetails());
+
+  // Update clock every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setWatInfo(getWATTimeDetails());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const filteredTransactions = transactions.filter((t) => {
     if (filter === "all") return true;
@@ -35,6 +100,10 @@ export default function TransactionHistoryView({
   const totalWithdrawals = transactions
     .filter((t) => t.type === "withdraw" && t.status !== "rejected" && t.status !== "declined")
     .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+  const pendingWithdrawals = transactions.filter(
+    (t) => t.type === "withdraw" && (t.status || "").toLowerCase() === "pending"
+  );
 
   const getStatusBadge = (status: string) => {
     const lower = (status || "pending").toLowerCase();
@@ -106,6 +175,54 @@ export default function TransactionHistoryView({
           </div>
         </div>
       </div>
+
+      {/* Shared Operational Window & Rules Banner */}
+      <OperationalRulesBanner showRulesList={false} />
+
+      {/* Pending Withdrawal Alert Banner with Countdown Indicator if any pending */}
+      {pendingWithdrawals.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Timer className="w-4 h-4 text-amber-600 animate-spin" />
+              <span className="text-xs font-extrabold text-amber-900">
+                {pendingWithdrawals.length} Pending Withdrawal{pendingWithdrawals.length > 1 ? "s" : ""} in Settlement Queue
+              </span>
+            </div>
+            <span className="text-[10px] font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-bold">
+              {watInfo.isOpen ? "Processing Active" : "Queued for 09:00 AM"}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-amber-800/90 leading-relaxed font-normal">
+            {watInfo.isOpen
+              ? "Your withdrawal request is being verified by our NIBSS interbank settlement team. Estimated clearance within the current operational window."
+              : `Your withdrawal request is safely queued and will be processed immediately when the settlement window opens at 9:00 AM WAT (${watInfo.countdownText}).`}
+          </p>
+
+          {/* Settlement Step Pipeline */}
+          <div className="pt-1">
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-bold">
+              <div className="bg-amber-200/70 text-amber-900 py-1 px-1.5 rounded-lg border border-amber-300/50 flex items-center justify-center gap-1">
+                <CheckCircle className="w-3 h-3 text-amber-700" />
+                <span>Submitted</span>
+              </div>
+              <div className={`py-1 px-1.5 rounded-lg border flex items-center justify-center gap-1 ${
+                watInfo.isOpen 
+                  ? "bg-amber-300/80 border-amber-400 text-amber-950 animate-pulse" 
+                  : "bg-amber-100/60 border-amber-200 text-amber-700"
+              }`}>
+                <Clock className="w-3 h-3" />
+                <span>Interbank</span>
+              </div>
+              <div className="bg-amber-100/40 text-amber-600 py-1 px-1.5 rounded-lg border border-amber-200/40 flex items-center justify-center gap-1">
+                <Receipt className="w-3 h-3" />
+                <span>Credited</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center bg-gray-100/80 p-1 rounded-xl gap-1 border border-gray-200/60">
@@ -198,6 +315,22 @@ export default function TransactionHistoryView({
                 {tx.details && (
                   <div className="pt-2 border-t border-gray-100 text-[11px] text-gray-600 font-mono leading-relaxed bg-gray-50/60 p-2 rounded-xl">
                     {tx.details}
+                  </div>
+                )}
+
+                {/* Pending Withdrawal Status Info */}
+                {!isDeposit && (tx.status || "").toLowerCase() === "pending" && (
+                  <div className="pt-2 border-t border-amber-100/80 bg-amber-50/50 p-2.5 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-600 animate-spin" />
+                        Settlement Window
+                      </span>
+                      <span className="font-mono text-amber-800">{watInfo.isOpen ? "Active Processing" : "Queued (09:00 AM)"}</span>
+                    </div>
+                    <p className="text-[10px] text-amber-700/90 leading-tight">
+                      Net Payout: ₦{(tx.netPayout || Math.round(amount * 0.82)).toLocaleString()} (18% fee: ₦{(tx.fee || Math.round(amount * 0.18)).toLocaleString()})
+                    </p>
                   </div>
                 )}
               </div>

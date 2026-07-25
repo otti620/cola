@@ -7,6 +7,7 @@ import {
 import { UserProfile } from "../types";
 import { db } from "../lib/firebase";
 import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
+import { safeCopyToClipboard, isValidAbsoluteUrl } from "../utils/clipboard";
 
 interface TeamTabProps {
   user: UserProfile;
@@ -41,29 +42,34 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   const inviteCode = user.referralCode || "9JFXJX";
-  const inviteLink = typeof window !== "undefined" 
-    ? `${window.location.origin}/register?ref=${inviteCode}`
-    : `https://www.careem-invest.com/register?ref=${inviteCode}`;
+  const origin = (typeof window !== "undefined" && window.location.origin && window.location.origin !== "null" && window.location.origin !== "about:blank")
+    ? window.location.origin
+    : "https://www.careem-invest.com";
+  const inviteLink = `${origin}/register?ref=${inviteCode}`;
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string, label: string) => {
+    await safeCopyToClipboard(text);
     setToastMessage(`Copied ${label} to clipboard!`);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleShare = async () => {
+    const validShareUrl = isValidAbsoluteUrl(inviteLink) 
+      ? inviteLink 
+      : `https://www.careem-invest.com/register?ref=${inviteCode}`;
+
     if (navigator.share) {
       try {
         await navigator.share({
           title: "Join Partner Investment Portal",
           text: `Use my referral code ${inviteCode} to earn daily returns on sponsorship plans!`,
-          url: inviteLink,
+          url: validShareUrl,
         });
       } catch (err) {
-        console.log("Share dismissed");
+        console.log("Share dismissed or failed:", err);
       }
     } else {
-      copyToClipboard(inviteLink, "Invitation Link");
+      await copyToClipboard(validShareUrl, "Invitation Link");
     }
   };
 

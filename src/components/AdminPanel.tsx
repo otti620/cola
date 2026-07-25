@@ -29,7 +29,7 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   const [pendingTxs, setPendingTxs] = useState<any[]>([]);
   const [systemRules, setSystemRules] = useState({
     minWithdrawal: 1500,
-    withdrawalFeePercent: 10,
+    withdrawalFeePercent: 18,
     refL1Percent: 20,
     refL2Percent: 3,
     refL3Percent: 1,
@@ -104,14 +104,16 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
 
     try {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(title, {
-            body,
-            icon: "/favicon.ico",
-            badge: "/favicon.ico",
-            vibrate: [200, 100, 200]
-          } as any);
-        });
+        navigator.serviceWorker.ready
+          .then((reg) => {
+            reg.showNotification(title, {
+              body,
+              icon: "/favicon.ico"
+            });
+          })
+          .catch((err) => {
+            console.warn("ServiceWorker notification failed:", err);
+          });
       } else {
         new Notification(title, { body, icon: "/favicon.ico" });
       }

@@ -125,42 +125,6 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
           <h1 className="text-xl font-black text-slate-900 font-display">Beverage Packages & Yield Plans</h1>
           <p className="text-xs text-slate-500 font-medium">8 Verified Investment Tiers · 100-day cycles · Daily auto-credits</p>
         </div>
-
-        <button
-          onClick={() => setShowPitchDeckModal(true)}
-          className="bg-[#e41e2b] hover:bg-[#c41622] text-white font-black text-xs px-3.5 py-2.5 rounded-2xl flex items-center gap-1.5 shadow-md transition cursor-pointer shrink-0"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-          <span>Prospectus</span>
-        </button>
-      </div>
-
-      {/* Strategic Investor Prospectus Quick Banner */}
-      <div 
-        onClick={() => setShowPitchDeckModal(true)}
-        className="relative rounded-2xl overflow-hidden bg-slate-900 text-white p-4 border border-slate-800 shadow-md cursor-pointer group"
-      >
-        <img 
-          src={COCA_COLA_BRAND_ASSETS.productPortfolioMatrix.url}
-          alt="Brand Assets Matrix"
-          className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:scale-105 transition-transform duration-500"
-        />
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold bg-[#e41e2b] text-white px-2 py-0.5 rounded uppercase tracking-wider">
-              Investor Proof
-            </span>
-            <h3 className="text-sm font-black text-white font-display">
-              View Verified Bottling & Logistics Assets
-            </h3>
-            <p className="text-[11px] text-slate-300">
-              100-day dividend cycles backed by physical inventory.
-            </p>
-          </div>
-          <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:bg-[#e41e2b] transition">
-            <Building2 className="w-4 h-4" />
-          </span>
-        </div>
       </div>
 
       {/* Filter and Sort Pills */}

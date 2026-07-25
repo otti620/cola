@@ -7,6 +7,7 @@ import { db, auth } from "../lib/firebase";
 import { doc, updateDoc, collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { NIGERIAN_BANKS, predictBankFromNuban, resolveNubanAccount, BankInfo } from "../utils/nuban";
 import { notifyToast } from "../utils/toast";
+import OperationalRulesBanner, { getWATTimeDetails } from "./OperationalRulesBanner";
 
 interface WithdrawViewProps {
   user: UserProfile;
@@ -16,14 +17,30 @@ interface WithdrawViewProps {
   onNavigateToRecharge?: () => void;
 }
 
-const PRESET_WITHDRAWALS = [1200, 5000, 20000, 50000, 100000];
+const PRESET_WITHDRAWALS = [1500, 5000, 20000, 50000, 100000];
+
+function getWATTime(): { hours: number; minutes: number; formatted: string; isWithinWindow: boolean } {
+  const now = new Date();
+  const utcHours = now.getUTCHours();
+  const watHours = (utcHours + 1) % 24; // West Africa Time (UTC+1)
+  const minutes = now.getUTCMinutes();
+  
+  // Enforce withdrawal window: 9:00 AM to 4:00 PM daily (09:00 to 16:00 WAT)
+  const isWithinWindow = watHours >= 9 && watHours < 16;
+  
+  const ampmHour = watHours % 12 === 0 ? 12 : watHours % 12;
+  const ampm = watHours >= 12 ? "PM" : "AM";
+  const formatted = `${String(ampmHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${ampm} WAT`;
+  
+  return { hours: watHours, minutes, formatted, isWithinWindow };
+}
 
 export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, onNavigateToRecharge }: WithdrawViewProps) {
-  const [selectedAmount, setSelectedAmount] = useState<number | "">(1200);
+  const [selectedAmount, setSelectedAmount] = useState<number | "">(1500);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   
   // Deposit verification state
-  const [hasMadeDeposit, setHasMadeDeposit] = useState<boolean>(true);
+  const [hasMadeDeposit, setHasMadeDeposit] = useState<boolean>(false);
   const [checkingDepositStatus, setCheckingDepositStatus] = useState<boolean>(true);
 
   // Bank details form
@@ -52,7 +69,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           return;
         }
 
-        if ((user as any).totalDeposit && (user as any).totalDeposit > 0) {
+        if (user.hasMadeFirstDeposit || ((user as any).totalDeposit && (user as any).totalDeposit > 0)) {
           setHasMadeDeposit(true);
           setCheckingDepositStatus(false);
           return;
@@ -63,7 +80,11 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
         const snap = await getDocs(q);
 
         if (!snap.empty) {
-          setHasMadeDeposit(true);
+          const hasConfirmedDeposit = snap.docs.some((doc) => {
+            const st = (doc.data().status || "").toLowerCase();
+            return st === "approved" || st === "completed" || st === "success" || st === "successful";
+          });
+          setHasMadeDeposit(hasConfirmedDeposit);
         } else {
           setHasMadeDeposit(false);
         }
@@ -148,8 +169,40 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
   const handleConfirmWithdrawal = async () => {
     setErrorMessage("");
 
+    // Enforce 9:00 AM - 4:00 PM WAT Withdrawal Time Window
+    const timeInfo = getWATTime();
+    if (!timeInfo.isWithinWindow) {
+      setErrorMessage(`Withdrawals are strictly permitted between 9:00 AM and 4:00 PM daily. (Current time: ${timeInfo.formatted})`);
+      return;
+    }
+
+    // Live database re-verification of approved deposit requirement
+    const uid = auth.currentUser?.uid || user.uid;
+    if (uid) {
+      let isVerified = user.hasMadeFirstDeposit || ((user as any).totalDeposit && (user as any).totalDeposit > 0);
+      if (!isVerified) {
+        try {
+          const transRef = collection(db, "users", uid, "transactions");
+          const q = query(transRef, where("type", "==", "deposit"));
+          const snap = await getDocs(q);
+          isVerified = snap.docs.some((doc) => {
+            const st = (doc.data().status || "").toLowerCase();
+            return st === "approved" || st === "completed" || st === "success" || st === "successful";
+          });
+        } catch (e) {
+          console.error("Live deposit check error:", e);
+        }
+      }
+
+      if (!isVerified) {
+        setHasMadeDeposit(false);
+        setErrorMessage("Withdrawal prohibited: No approved deposit record was found for your account in the database. Please complete a deposit first.");
+        return;
+      }
+    }
+
     if (!hasMadeDeposit) {
-      setErrorMessage("You must complete at least one deposit (minimum ₦3,000) before you can place a withdrawal request.");
+      setErrorMessage("Withdrawal prohibited: You must have at least one approved deposit record in the database before you can place a withdrawal request.");
       return;
     }
 
@@ -160,8 +213,8 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
       return;
     }
 
-    if (amt < 1200) {
-      setErrorMessage("The minimum withdrawal amount is ₦1,200.");
+    if (amt < 1500) {
+      setErrorMessage("The minimum withdrawal amount is ₦1,500.");
       return;
     }
 
@@ -178,7 +231,8 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
     setSubmittingWithdrawal(true);
     try {
       const uid = auth.currentUser?.uid || user.uid;
-      const netPayout = Math.round(amt * 0.88); // 12% fee deducted
+      const feeAmount = Math.round(amt * 0.18); // 18% fee
+      const netPayout = Math.round(amt * 0.82); // 82% net payout
 
       if (uid) {
         const newBalance = user.balance - amt;
@@ -191,7 +245,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
         await addDoc(transRef, {
           type: "withdrawal",
           amount: amt,
-          fee: Math.round(amt * 0.12),
+          fee: feeAmount,
           netPayout,
           status: "pending",
           timestamp: new Date().toLocaleString("en-NG"),
@@ -222,13 +276,15 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
     }
   };
 
+  const timeInfo = getWATTime();
   const parsedAmt = typeof selectedAmount === "number" ? selectedAmount : parseFloat(selectedAmount as string);
   const isFormValid = !!(
     hasMadeDeposit &&
     parsedAmt && 
     !isNaN(parsedAmt) && 
-    parsedAmt >= 1200 && 
-    user.bankAccount
+    parsedAmt >= 1500 && 
+    user.bankAccount &&
+    timeInfo.isWithinWindow
   );
 
   return (
@@ -277,11 +333,14 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           </div>
         )}
 
+        {/* Withdrawal Time Window & Rules Status Banner */}
+        <OperationalRulesBanner showRulesList={false} />
+
         {/* Card 1: Amount Selection & Custom Input */}
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500 font-medium">Withdrawal Amount</p>
-            <span className="text-[10px] font-mono text-slate-400">Min: ₦1,200</span>
+            <span className="text-[10px] font-mono text-slate-400">Min: ₦1,500</span>
           </div>
 
           {/* Editable Custom Withdrawal Input */}
@@ -296,8 +355,8 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
                   setSelectedAmount(val === "" ? "" : Number(val));
                   setErrorMessage("");
                 }}
-                placeholder="1200"
-                min={1200}
+                placeholder="1500"
+                min={1500}
                 className="bg-white text-2xl sm:text-3xl font-black text-[#c83a00] text-center w-full max-w-[220px] px-3 py-1.5 rounded-xl border border-[#ffccd0] focus:outline-none focus:ring-2 focus:ring-[#c83a00] shadow-xs"
               />
             </div>
@@ -307,7 +366,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           </div>
 
           <p className="text-center text-xs text-slate-400 font-mono">
-            ₦1,200 ~ ₦1,000,000
+            ₦1,500 ~ ₦1,000,000
           </p>
 
           {/* Preset Buttons Grid (3 cols) */}
@@ -390,34 +449,8 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           )}
         </div>
 
-        {/* Card 3: Withdrawal Rules */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-3">
-          <div className="flex items-center space-x-2 text-slate-600 font-bold text-xs">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Withdrawal Rules:</span>
-          </div>
-
-          <ol className="space-y-3 text-xs text-slate-500 leading-relaxed list-decimal pl-4 font-normal">
-            <li>
-              The minimum withdrawal amount is <strong className="text-slate-800 font-bold">₦1200</strong>.
-            </li>
-            <li>
-              There is no limit to the number of withdrawals per day.
-            </li>
-            <li>
-              A 12% processing fee will be charged for each withdrawal.
-            </li>
-            <li>
-              If a withdrawal fails, you may resubmit your request or attempt to withdraw using a different bank account.
-            </li>
-            <li>
-              Withdrawal requests are processed Monday through Sunday, from <strong className="text-slate-800 font-bold">10:00 AM to 5:00 PM</strong>.
-            </li>
-            <li>
-              Withdrawn funds will be credited to your account within 24 hours (barring exceptional circumstances). Please wait patiently while our banking team processes your withdrawal request.
-            </li>
-          </ol>
-        </div>
+        {/* Card 3: Shared Withdrawal Rules Banner */}
+        <OperationalRulesBanner showRulesList={true} minWithdrawal={1500} feePercent={18} />
 
       </div>
 
@@ -447,7 +480,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           </button>
 
           <p className="text-[11px] text-slate-400 font-medium">
-            Service hours: 09:00-19:00
+            Withdrawal Window: 09:00 AM – 04:00 PM Daily
           </p>
         </div>
       </div>
@@ -577,7 +610,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
                 Your request to withdraw <strong className="text-slate-900">₦{typeof selectedAmount === "number" ? selectedAmount.toLocaleString() : selectedAmount}</strong> has been received.
               </p>
               <p className="text-[11px] text-slate-400">
-                Net payout after 12% fee: <strong className="text-slate-800">₦{Math.round((typeof selectedAmount === "number" ? selectedAmount : 1200) * 0.88).toLocaleString()}</strong>
+                Net payout after 18% fee: <strong className="text-slate-800">₦{Math.round((typeof selectedAmount === "number" ? selectedAmount : 1500) * 0.82).toLocaleString()}</strong>
               </p>
               <p className="text-[11px] text-slate-400 pt-1">
                 Funds will be processed directly to your local bank account within standard processing hours.

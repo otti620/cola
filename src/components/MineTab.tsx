@@ -4,7 +4,7 @@ import {
   Clock, Landmark, History, CreditCard, ChevronRight, PhoneCall, HelpCircle, Upload, Check, CheckCircle,
   Globe2, FileText, Headphones, BarChart3, ClipboardList, Activity, Mail, Languages, LogOut, Grid,
   Send, AlertTriangle, ChevronLeft, Bell, KeyRound, Download, Cpu, Sparkles, MessageCircle, FileSpreadsheet, FileCheck, FileMinus,
-  Box, Package, Receipt, CalendarCheck, Calendar, BadgeDollarSign, Coins, DollarSign, Gift, Lock, Pencil, Edit3, Sliders, Info, Eye, EyeOff, Plus, ArrowUp, X
+  Box, Package, Receipt, CalendarCheck, Calendar, BadgeDollarSign, Coins, DollarSign, Gift, Lock, Pencil, Edit3, Sliders, Info, Eye, EyeOff, Plus, ArrowUp, X, ArrowDownLeft, ArrowUpRight
 } from "lucide-react";
 import RechargeView from "./RechargeView";
 import WithdrawView from "./WithdrawView";
@@ -89,7 +89,7 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
   const [rules, setRules] = useState({
     minDeposit: 2000,
     minWithdrawal: 1500,
-    withdrawalFeePercent: 10,
+    withdrawalFeePercent: 18,
     bankName: "Guaranty Trust Bank (GTBank)",
     bankAccount: "0552391032",
     bankHolder: "Coca-Cola Bottling Co. Nig",
@@ -743,44 +743,62 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
             </div>
           </div>
 
-          {/* Section 2: HISTORY */}
+          {/* Section 2: RECENT ACTIVITY TICKER */}
           <div className="px-4 space-y-1.5 pt-1">
-            <h3 className="text-[11px] font-bold text-gray-400 tracking-wider uppercase px-1">HISTORY</h3>
-            <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100 shadow-2xs overflow-hidden">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">RECENT ACTIVITY</h3>
+              <span className="text-[10px] text-gray-400 font-mono font-medium">{transactions.length} Total Logs</span>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-2xs overflow-hidden p-3.5 space-y-3">
+              {transactions.length > 0 ? (
+                <div className="space-y-2">
+                  {transactions.slice(0, 3).map((tx, idx) => {
+                    const isDeposit = tx.type === "deposit";
+                    const statusLower = (tx.status || "pending").toLowerCase();
+                    const isSuccess = statusLower === "approved" || statusLower === "completed" || statusLower === "success";
+                    return (
+                      <div key={tx.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-gray-50/80 border border-gray-100/80">
+                        <div className="flex items-center space-x-2.5">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            isDeposit ? "bg-emerald-100/70 text-emerald-700" : "bg-rose-100/70 text-rose-700"
+                          }`}>
+                            {isDeposit ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-gray-900 capitalize">
+                              {tx.type} {isDeposit ? "Recharge" : "Cashout"}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-mono">{tx.timestamp || "Just now"}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xs font-black font-mono ${isDeposit ? "text-emerald-600" : "text-slate-900"}`}>
+                            {isDeposit ? "+" : "-"}₦{(tx.amount || 0).toLocaleString()}
+                          </p>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                            isSuccess ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {tx.status || "Pending"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-2 text-xs text-gray-400 font-medium">
+                  No recent transaction records
+                </div>
+              )}
+
               <button
                 onClick={() => setActiveView("transaction_history")}
-                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50/80 transition cursor-pointer bg-amber-50/20"
+                className="w-full bg-[#e41e2b]/10 hover:bg-[#e41e2b]/15 text-[#e41e2b] font-extrabold text-xs py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <div className="flex items-center space-x-3">
-                  <History className="w-5 h-5 text-[#D9381E] stroke-[2]" />
-                  <div>
-                    <span className="text-sm font-bold text-gray-900 block">Transaction History</span>
-                    <span className="text-[10px] text-gray-500 font-medium">All deposits and cashout records</span>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-
-              <button
-                onClick={() => setActiveView("topup_records")}
-                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50/80 transition cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <Receipt className="w-5 h-5 text-gray-700 stroke-[1.8]" />
-                  <span className="text-sm font-semibold text-gray-900">Recharge history</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-
-              <button
-                onClick={() => setActiveView("withdraw_records")}
-                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50/80 transition cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <FileText className="w-5 h-5 text-gray-700 stroke-[1.8]" />
-                  <span className="text-sm font-semibold text-gray-900">Withdrawal history</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
+                <History className="w-4 h-4" />
+                <span>View All Log Records</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>

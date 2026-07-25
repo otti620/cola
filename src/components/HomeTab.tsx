@@ -216,44 +216,6 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
         </div>
       </div>
 
-      {/* STRATEGIC INVESTOR PROSPECTUS BANNER */}
-      <div 
-        onClick={() => setShowPitchDeckModal(true)}
-        className="relative rounded-3xl overflow-hidden shadow-lg border border-slate-800 bg-slate-900 cursor-pointer group transition transform active:scale-98"
-      >
-        <img 
-          src={COCA_COLA_BRAND_ASSETS.realMagicCollage.url}
-          alt="Investor Prospectus"
-          className="w-full h-44 object-cover object-center group-hover:scale-105 transition-transform duration-700 opacity-90"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent p-5 flex flex-col justify-between text-white">
-          <div>
-            <div className="flex items-center space-x-2 mb-1">
-              <span className="bg-[#e41e2b] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> Investor Deck
-              </span>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold">Verified Portfolio</span>
-            </div>
-            <h3 className="text-lg font-black text-white font-display leading-tight">
-              Coca-Cola Bottling Equity Prospectus
-            </h3>
-            <p className="text-xs text-slate-300 mt-0.5 max-w-[240px]">
-              Review 100-day dividend cycles, product packaging matrix & institutional headshots.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-[10px] text-amber-300 font-mono font-bold flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" /> 100% Capital Guaranteed
-            </span>
-            <button className="bg-white text-slate-900 hover:bg-slate-100 font-black text-[11px] px-3.5 py-1.5 rounded-full flex items-center gap-1 shadow-md transition cursor-pointer">
-              <span>View Prospectus</span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#e41e2b]" />
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* 2. ACTIVITIES SECTION */}
       <div className="space-y-2.5">
         <h2 className="text-base font-bold text-slate-800 px-1">

@@ -57,6 +57,7 @@ export interface TransactionRecord {
   timestamp: string;
   details?: string;
   fee?: number;
+  netPayout?: number;
   payoutAmount?: number;
 }
 

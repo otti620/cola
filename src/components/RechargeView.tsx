@@ -7,6 +7,8 @@ import { db, auth } from "../lib/firebase";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { notifyToast } from "../utils/toast";
 
+import { safeCopyToClipboard } from "../utils/clipboard";
+
 interface RechargeViewProps {
   user: UserProfile;
   onBack: () => void;
@@ -260,8 +262,8 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
     }, 3800);
   };
 
-  const copyBankNumber = () => {
-    navigator.clipboard.writeText(bankAccountInfo.accountNumber);
+  const copyBankNumber = async () => {
+    await safeCopyToClipboard(bankAccountInfo.accountNumber);
     setCopiedBankNo(true);
     hasCopiedAccRef.current = true;
     setProgressPercent((prev) => Math.max(prev, 58));
@@ -269,8 +271,8 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
     setTimeout(() => setCopiedBankNo(false), 2500);
   };
 
-  const copyRefCode = () => {
-    navigator.clipboard.writeText(checkoutRef);
+  const copyRefCode = async () => {
+    await safeCopyToClipboard(checkoutRef);
     setCopiedRef(true);
     hasCopiedRefCodeRef.current = true;
     setProgressPercent((prev) => Math.max(prev, 72));
