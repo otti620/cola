@@ -190,6 +190,7 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           email: derivedEmail,
           fullName: `Investor Partner ${cleanPhone.slice(-4)}`,
           balance: 1100, // ₦1,100 registration bonus
+          totalDeposit: 0,
           totalProfit: 0,
           referralCode: "COCA_" + Math.random().toString(36).substring(2, 7).toUpperCase(),
           referredBy: (inviteCode || localStorage.getItem("pending_referral_code") || "").trim().toUpperCase() || null,
@@ -207,31 +208,8 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           console.error("Firestore write user document error:", setErr);
         }
 
-        // Handle referral bonus if valid referral code was provided
-        const finalRefCode = (inviteCode || localStorage.getItem("pending_referral_code") || "").trim();
-        if (finalRefCode) {
-          try {
-            let refQuery = query(collection(db, "users"), where("referralCode", "==", finalRefCode.toUpperCase()));
-            let refSnap = await getDocs(refQuery);
-            if (refSnap.empty) {
-              refQuery = query(collection(db, "users"), where("referralCode", "==", finalRefCode));
-              refSnap = await getDocs(refQuery);
-            }
-            if (!refSnap.empty) {
-              const referrerDoc = refSnap.docs[0];
-              const refData = referrerDoc.data() as UserProfile;
-              const refBonus = 200;
-              await updateDoc(doc(db, "users", referrerDoc.id), {
-                balance: (refData.balance || 0) + refBonus,
-                totalProfit: (refData.totalProfit || 0) + refBonus
-              });
-            }
-          } catch (e) {
-            console.warn("Referral credit error:", e);
-          } finally {
-            localStorage.removeItem("pending_referral_code");
-          }
-        }
+        // Clean pending referral code from localStorage (referredBy is stored in user profile for deposit commission)
+        localStorage.removeItem("pending_referral_code");
 
         localStorage.setItem("cocacola_invest_user", JSON.stringify(newUser));
         onSuccess(newUser);

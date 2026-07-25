@@ -4,6 +4,7 @@ export interface UserProfile {
   email: string;
   fullName?: string;
   balance: number;
+  totalDeposit?: number;
   totalProfit: number;
   referralCode: string;
   referredBy?: string | null;

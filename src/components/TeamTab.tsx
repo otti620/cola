@@ -205,7 +205,7 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
 
   // Helper to get member deposit volume
   const getMemberDeposit = (member: UserProfile) => {
-    return (member as any).totalDeposit ?? (member.balance || 0);
+    return member.totalDeposit || 0;
   };
 
   // Calculate rebate commissions based on team member deposits

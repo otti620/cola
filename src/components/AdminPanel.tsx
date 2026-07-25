@@ -266,6 +266,7 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
           const currentBal = userData.balance || 0;
           await updateDoc(userRef, {
             balance: currentBal + tx.amount,
+            totalDeposit: ((userData as any).totalDeposit || 0) + tx.amount,
             creditScore: Math.min(100, (userData.creditScore || 0) + 5),
             hasMadeFirstDeposit: true
           });
