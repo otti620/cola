@@ -290,7 +290,7 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
               <span className="text-xs font-medium text-slate-200">/per day</span>
             </div>
             <p className="text-xs text-slate-200 mt-1">
-              60 days · Total return ₦60,000
+              100 days · Total return ₦100,000
             </p>
 
             <button 
@@ -327,8 +327,8 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
                 <p className="text-base font-extrabold text-[#059669] mt-0.5">+₦2,060</p>
               </div>
               <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
-                <span className="text-slate-400 font-medium">60 days</span>
-                <span className="font-bold text-slate-700">₦123,600</span>
+                <span className="text-slate-400 font-medium">100 days</span>
+                <span className="font-bold text-slate-700">₦206,000</span>
               </div>
             </div>
           </div>
@@ -352,8 +352,8 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
                 <p className="text-base font-extrabold text-[#059669] mt-0.5">+₦4,700</p>
               </div>
               <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
-                <span className="text-slate-400 font-medium">60 days</span>
-                <span className="font-bold text-slate-700">₦282,000</span>
+                <span className="text-slate-400 font-medium">100 days</span>
+                <span className="font-bold text-slate-700">₦470,000</span>
               </div>
             </div>
           </div>
@@ -398,11 +398,11 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Investment Cycle:</span>
-                <span className="text-slate-900 font-bold">60 Days</span>
+                <span className="text-slate-900 font-bold">100 Days</span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2">
                 <span className="text-slate-500">Total Return:</span>
-                <span className="text-[#c83a00] font-bold">₦{(selectedPlan.dailyReward * 60).toLocaleString()}</span>
+                <span className="text-[#c83a00] font-bold">₦{(selectedPlan.dailyReward * 100).toLocaleString()}</span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2">
                 <span className="text-slate-500">Your Wallet Balance:</span>
@@ -493,7 +493,7 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
 
             <div className="space-y-2 pt-2">
               <a 
-                href="https://t.me/careeminvest"
+                href="https://t.me/+rCmqVoNN7SgwMzY8"
                 target="_blank"
                 rel="noreferrer"
                 className="w-full bg-[#c83a00] hover:bg-[#a32e00] text-white font-bold py-3 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-sm transition block"

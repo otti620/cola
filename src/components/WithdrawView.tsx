@@ -655,7 +655,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
 
             <div className="space-y-2 pt-2">
               <a 
-                href="https://t.me/careeminvest"
+                href="https://t.me/+rCmqVoNN7SgwMzY8"
                 target="_blank"
                 rel="noreferrer"
                 className="w-full bg-[#c83a00] hover:bg-[#a32e00] text-white font-bold py-3 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-xs transition block"

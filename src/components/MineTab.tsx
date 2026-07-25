@@ -1072,7 +1072,7 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
                     Daily Earnings: <strong className="text-emerald-600">₦{currentTier.dailyReward.toLocaleString()}</strong>
                   </div>
                   <div className="text-xs text-gray-500 font-mono">
-                    Investment Cycle: <strong className="text-gray-900">100 Days</strong>
+                    Investment Cycle: <strong className="text-gray-900">60 Days</strong>
                   </div>
                 </div>
               </div>

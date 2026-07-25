@@ -84,12 +84,12 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
         amountInvested: plan.price,
         dailyInterestRate: plan.dailyReward / plan.price,
         dailyReward: plan.dailyReward,
-        durationDays: plan.durationDays || 100,
-        daysRemaining: plan.durationDays || 100,
+        durationDays: plan.durationDays || 60,
+        daysRemaining: plan.durationDays || 60,
         accumulatedProfit: 0,
         startDate: new Date().toLocaleDateString("en-NG"),
         lastPayoutAt: Date.now(),
-        endDate: new Date(Date.now() + 86400000 * (plan.durationDays || 100)).toLocaleDateString("en-NG"),
+        endDate: new Date(Date.now() + 86400000 * (plan.durationDays || 60)).toLocaleDateString("en-NG"),
         status: "active",
         createdAt: serverTimestamp()
       });
@@ -250,11 +250,11 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
               </div>
               <div className="flex justify-between items-center py-1 border-t border-slate-100">
                 <span className="text-slate-500 font-medium">Cycle</span>
-                <span className="font-bold text-slate-900">60 days</span>
+                <span className="font-bold text-slate-900">100 days</span>
               </div>
               <div className="flex justify-between items-center py-1 border-t border-slate-100">
                 <span className="text-slate-500 font-medium">Total income</span>
-                <span className="font-extrabold text-slate-900">₦{(plan.dailyReward * 60).toLocaleString()}</span>
+                <span className="font-extrabold text-slate-900">₦{(plan.dailyReward * 100).toLocaleString()}</span>
               </div>
             </div>
 
@@ -317,11 +317,11 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Cycle:</span>
-                <span className="text-slate-900 font-bold">60 days</span>
+                <span className="text-slate-900 font-bold">100 days</span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2">
                 <span className="text-slate-500">Total income:</span>
-                <span className="text-[#c83a00] font-bold">₦{(selectedPlan.dailyReward * 60).toLocaleString()}</span>
+                <span className="text-[#c83a00] font-bold">₦{(selectedPlan.dailyReward * 100).toLocaleString()}</span>
               </div>
               <div className="flex justify-between border-t border-slate-200 pt-2">
                 <span className="text-slate-500">Your Wallet Balance:</span>
@@ -399,8 +399,8 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
                   <span className="text-[#059669] font-bold">+₦{(calcPlan.dailyReward * calcQuantity).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-200 pt-2">
-                  <span className="text-slate-500">60-Day Total Return:</span>
-                  <span className="text-[#c83a00] font-bold">₦{(calcPlan.dailyReward * 60 * calcQuantity).toLocaleString()}</span>
+                  <span className="text-slate-500">100-Day Total Return:</span>
+                  <span className="text-[#c83a00] font-bold">₦{(calcPlan.dailyReward * 100 * calcQuantity).toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -442,7 +442,7 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
 
             <div className="space-y-2 pt-2">
               <a 
-                href="https://t.me/careeminvest"
+                href="https://t.me/+rCmqVoNN7SgwMzY8"
                 target="_blank"
                 rel="noreferrer"
                 className="w-full bg-[#c83a00] hover:bg-[#a32e00] text-white font-bold py-3 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-xs transition block"

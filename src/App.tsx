@@ -23,11 +23,13 @@ import AppSkeletonLoader from "./components/AppSkeletonLoader";
 import ToastContainer, { ToastItem } from "./components/ToastContainer";
 import { notifyToast } from "./utils/toast";
 
+import TelegramFlyerModal from "./components/TelegramFlyerModal";
+
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("home");
-  const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [showTelegramModal, setShowTelegramModal] = useState<boolean>(true);
   const [mineActiveView, setMineActiveView] = useState<"none" | "deposit" | "withdraw" | "fund">("none");
 
   // Toast Notification System state
@@ -76,11 +78,6 @@ export default function App() {
     let unsubscribeFirestore: (() => void) | null = null;
     let unsubscribeAuth: (() => void) | null = null;
     
-    // Telegram Modal logic
-    if (activeTab === "home") {
-        setShowTelegramModal(true);
-    }
-
     // Load initial cached user from localStorage for instant display
     const cachedUserRaw = localStorage.getItem("cocacola_invest_user");
     if (cachedUserRaw) {
@@ -308,11 +305,7 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === "home") {
-      setShowTelegramModal(true);
-    }
-  }, [activeTab]);
+
 
   if (loading) {
     return <AppSkeletonLoader />;
@@ -410,30 +403,6 @@ export default function App() {
             }}
           />
         )}
-        
-        {showTelegramModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-            <div className="bg-white p-8 rounded-3xl text-center space-y-6 max-w-sm w-full">
-              <h2 className="text-xl font-black text-slate-900">Join Telegram Group</h2>
-              <p className="text-sm text-slate-600">Join our official telegram group for latest updates and daily promo codes.</p>
-              <a 
-                href="https://t.me/careeminvest" 
-                target="_blank" 
-                rel="noreferrer"
-                className="block bg-[#e41e2b] text-white font-bold py-3 rounded-xl hover:bg-[#c41622] transition"
-                onClick={() => setShowTelegramModal(false)}
-              >
-                Join Now
-              </a>
-              <button 
-                onClick={() => setShowTelegramModal(false)}
-                className="text-slate-400 text-xs font-bold uppercase hover:text-slate-600"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
 
         {activeTab === "task" && (
           <TaskTab 
@@ -489,7 +458,6 @@ export default function App() {
             user={user} 
             onUpdateUser={handleUpdateUser}
             onNavigateToTab={(tab) => {
-            if (tab === "home") setShowTelegramModal(true);
             setActiveTab(tab);
           }}
           />
@@ -559,6 +527,12 @@ export default function App() {
       )}
 
       <ChatFAB />
+
+      {/* New Flyer Popup for Telegram Community & Plans */}
+      <TelegramFlyerModal 
+        isOpen={showTelegramModal} 
+        onClose={() => setShowTelegramModal(false)} 
+      />
     </div>
   );
 }
