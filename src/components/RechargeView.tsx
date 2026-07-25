@@ -22,28 +22,20 @@ const PRESET_AMOUNTS = [
 
 const DYNAMIC_ACCOUNTS = [
   {
-    bankName: "Moniepoint MFB",
-    accountNumber: "6291038421",
-    accountName: "COCA-COLA GLOBAL YIELD MERCHANTS",
+    bankName: "PROSPA CAPITAL MFB",
+    accountNumber: "0120123957",
+    accountName: "LEVIATHAN HYPERMARKET",
     code: "505",
     color: "#0052cc",
     badge: "Instant NIP Settlement"
   },
   {
-    bankName: "Wema Bank / ALAT",
-    accountNumber: "0120122888",
-    accountName: "TITAN DIGITAL SYSTEMS LIMITED",
-    code: "035",
-    color: "#7b1fa2",
-    badge: "Auto-Reconciled"
-  },
-  {
-    bankName: "Sterling Bank",
-    accountNumber: "2329841029",
-    accountName: "COCA-COLA PAYMENTS NIGERIA",
-    code: "232",
-    color: "#c62828",
-    badge: "Direct NIP Gateway"
+    bankName: "PROSPA CAPITAL MFB",
+    accountNumber: "0120124662",
+    accountName: "LEVIATHAN HYPERMARKET",
+    code: "505",
+    color: "#0052cc",
+    badge: "Instant NIP Settlement"
   }
 ];
 
