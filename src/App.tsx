@@ -159,17 +159,9 @@ export default function App() {
                 setLoading(false);
               });
             } else {
-              // Check if a local user exists in localStorage
-              const savedUser = localStorage.getItem("cocacola_invest_user");
-              if (savedUser) {
-                try {
-                  setUser(JSON.parse(savedUser));
-                } catch (e) {
-                  setUser(null);
-                }
-              } else {
-                setUser(null);
-              }
+              localStorage.removeItem("cocacola_invest_user");
+              sessionStorage.clear();
+              setUser(null);
               if (unsubscribeFirestore) unsubscribeFirestore();
               setLoading(false);
             }
@@ -179,17 +171,10 @@ export default function App() {
           }
         },
         (authError) => {
-          console.warn("Firebase Auth listener notice (using local session):", authError);
-          const savedUser = localStorage.getItem("cocacola_invest_user");
-          if (savedUser) {
-            try {
-              setUser(JSON.parse(savedUser));
-            } catch (e) {
-              setUser(null);
-            }
-          } else {
-            setUser(null);
-          }
+          console.warn("Firebase Auth listener notice:", authError);
+          localStorage.removeItem("cocacola_invest_user");
+          sessionStorage.clear();
+          setUser(null);
           setLoading(false);
         }
       );
@@ -335,11 +320,16 @@ export default function App() {
   const handleLogout = async () => {
     try {
       localStorage.removeItem("cocacola_invest_user");
+      sessionStorage.clear();
       await signOut(auth);
-      setUser(null);
-      setActiveTab("home");
     } catch (error) {
       console.error("Error logging out:", error);
+    } finally {
+      localStorage.removeItem("cocacola_invest_user");
+      sessionStorage.clear();
+      setUser(null);
+      setActiveTab("home");
+      setMineActiveView("none");
     }
   };
 
@@ -486,6 +476,7 @@ export default function App() {
           <MineTab 
             user={user} 
             onUpdateUser={handleUpdateUser}
+            onLogout={handleLogout}
             activeView={mineActiveView}
             setActiveView={setMineActiveView}
           />

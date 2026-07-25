@@ -28,6 +28,7 @@ import {
 interface MineTabProps {
   user: UserProfile;
   onUpdateUser: (updated: UserProfile) => Promise<void> | void;
+  onLogout?: () => Promise<void> | void;
   activeView?: any;
   setActiveView?: (view: any) => void;
 }
@@ -38,7 +39,7 @@ interface ChatMessage {
   time: string;
 }
 
-export default function MineTab({ user, onUpdateUser, activeView: propActiveView, setActiveView: propSetActiveView }: MineTabProps) {
+export default function MineTab({ user, onUpdateUser, onLogout, activeView: propActiveView, setActiveView: propSetActiveView }: MineTabProps) {
   const currentTier = INVESTMENT_TIERS.find((t) => t.id === user.currentTierId) || INVESTMENT_TIERS[0];
   
   // Balance visibility toggle
@@ -194,10 +195,19 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [downloadComplete, setDownloadComplete] = useState<boolean>(false);
 
-  const handleConfirmLogOut = () => {
-    auth.signOut().then(() => {
+  const handleConfirmLogOut = async () => {
+    localStorage.removeItem("cocacola_invest_user");
+    sessionStorage.clear();
+    try {
+      await auth.signOut();
+    } catch (e) {
+      console.warn("SignOut error:", e);
+    }
+    if (onLogout) {
+      await onLogout();
+    } else {
       window.location.reload();
-    });
+    }
   };
 
   const reloadTransactions = async () => {

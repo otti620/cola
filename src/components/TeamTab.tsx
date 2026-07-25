@@ -147,44 +147,51 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
   const fetchTeamTree = async (currentCode: string) => {
     setLoadingTree(true);
     try {
-      // 1. Fetch Level 1 (Direct Referrals where referredBy == currentCode)
-      const l1Query = query(collection(db, "users"), where("referredBy", "==", currentCode));
-      const l1Snap = await getDocs(l1Query);
-      const l1List: UserProfile[] = [];
-      l1Snap.forEach(doc => l1List.push(doc.data() as UserProfile));
+      if (!currentCode) {
+        setLevel1Users([]);
+        setLevel2Users([]);
+        setLevel3Users([]);
+        return;
+      }
+
+      // Helper function to query users by referredBy array with case variations and deduplication
+      const fetchByReferredBy = async (codes: string[]) => {
+        const resultsMap = new Map<string, UserProfile>();
+        const allVariations = Array.from(new Set(
+          codes.flatMap(c => [c, c.toUpperCase(), c.toLowerCase()]).filter(Boolean)
+        ));
+
+        for (let i = 0; i < allVariations.length; i += 10) {
+          const chunk = allVariations.slice(i, i + 10);
+          const q = query(collection(db, "users"), where("referredBy", "in", chunk));
+          const snap = await getDocs(q);
+          snap.forEach(doc => {
+            const data = doc.data() as UserProfile;
+            const uid = data.uid || doc.id;
+            if (!resultsMap.has(uid)) {
+              resultsMap.set(uid, { ...data, uid });
+            }
+          });
+        }
+        return Array.from(resultsMap.values());
+      };
+
+      // 1. Fetch Level 1 (Direct Referrals)
+      const l1List = await fetchByReferredBy([currentCode]);
       setLevel1Users(l1List);
 
       // Auto expand root and Level 1 nodes
       const initialExpanded: Record<string, boolean> = { root: true };
-      l1List.forEach(u => { initialExpanded[u.uid] = true; });
+      l1List.forEach(u => { if (u.uid) initialExpanded[u.uid] = true; });
 
-      // 2. Fetch Level 2 (Referred by any Level 1 user)
-      const l2List: UserProfile[] = [];
+      // 2. Fetch Level 2 (Referred by Level 1 users)
       const l1Codes = l1List.map(u => u.referralCode).filter(Boolean);
-
-      if (l1Codes.length > 0) {
-        // Chunk query if l1Codes length > 10 (Firestore in limit)
-        for (let i = 0; i < l1Codes.length; i += 10) {
-          const chunk = l1Codes.slice(i, i + 10);
-          const l2Query = query(collection(db, "users"), where("referredBy", "in", chunk));
-          const l2Snap = await getDocs(l2Query);
-          l2Snap.forEach(doc => l2List.push(doc.data() as UserProfile));
-        }
-      }
+      const l2List = l1Codes.length > 0 ? await fetchByReferredBy(l1Codes) : [];
       setLevel2Users(l2List);
 
-      // 3. Fetch Level 3 (Referred by any Level 2 user)
-      const l3List: UserProfile[] = [];
+      // 3. Fetch Level 3 (Referred by Level 2 users)
       const l2Codes = l2List.map(u => u.referralCode).filter(Boolean);
-
-      if (l2Codes.length > 0) {
-        for (let i = 0; i < l2Codes.length; i += 10) {
-          const chunk = l2Codes.slice(i, i + 10);
-          const l3Query = query(collection(db, "users"), where("referredBy", "in", chunk));
-          const l3Snap = await getDocs(l3Query);
-          l3Snap.forEach(doc => l3List.push(doc.data() as UserProfile));
-        }
-      }
+      const l3List = l2Codes.length > 0 ? await fetchByReferredBy(l2Codes) : [];
       setLevel3Users(l3List);
 
       setExpandedNodes(initialExpanded);
@@ -205,7 +212,10 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
 
   // Helper to get member deposit volume
   const getMemberDeposit = (member: UserProfile) => {
-    return member.totalDeposit || 0;
+    if (typeof member.totalDeposit === "number" && member.totalDeposit > 0) {
+      return member.totalDeposit;
+    }
+    return member.balance || 0;
   };
 
   // Calculate rebate commissions based on team member deposits
