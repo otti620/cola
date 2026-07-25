@@ -580,7 +580,7 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f5] pb-28 font-sans animate-fade-in relative">
+    <div className="min-h-screen bg-[#f8f7f5] pb-36 font-sans animate-fade-in relative">
       
       {/* Top Header Bar */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-4 flex items-center justify-between shadow-xs">
@@ -608,13 +608,32 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
 
         {/* Card 2: Recharge Amount */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs space-y-4">
-          <p className="text-xs text-slate-500 font-medium">Recharge amount</p>
-
-          {/* Display container */}
-          <div className="bg-[#fff0f1]/60 rounded-2xl p-5 text-center border border-[#ffccd0]/60">
-            <span className="text-3xl sm:text-4xl font-black text-[#e41e2b]">
-              ₦ {selectedAmount.toLocaleString()}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500 font-medium">Recharge amount</p>
+            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              Custom or Preset
             </span>
+          </div>
+
+          {/* Display & Editable Custom Input container */}
+          <div className="bg-[#fff0f1]/60 rounded-2xl p-4 text-center border border-[#ffccd0]/60 space-y-2">
+            <div className="flex items-center justify-center space-x-1">
+              <span className="text-2xl sm:text-3xl font-black text-[#e41e2b]">₦</span>
+              <input
+                type="number"
+                value={selectedAmount || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedAmount(val === "" ? 0 : Number(val));
+                }}
+                placeholder="3000"
+                min={1000}
+                className="bg-white text-2xl sm:text-3xl font-black text-[#e41e2b] text-center w-full max-w-[220px] px-3 py-1.5 rounded-xl border border-[#ffccd0] focus:outline-none focus:ring-2 focus:ring-[#e41e2b] shadow-xs"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Type custom amount above or choose a quick preset below
+            </p>
           </div>
 
           <p className="text-center text-xs text-slate-400 font-mono">
@@ -630,13 +649,13 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
                   key={amt}
                   type="button"
                   onClick={() => setSelectedAmount(amt)}
-                  className={`py-3.5 px-2 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-95 ${
+                  className={`py-3.5 px-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer active:scale-95 ${
                     isSelected
                       ? "bg-[#e41e2b] text-white border-2 border-[#e41e2b] shadow-sm"
-                      : "bg-white text-slate-800 border border-slate-300 hover:border-slate-400 font-medium"
+                      : "bg-white text-slate-800 border border-slate-300 hover:border-slate-400 font-semibold"
                   }`}
                 >
-                  {amt.toLocaleString()}
+                  ₦{amt.toLocaleString()}
                 </button>
               );
             })}
@@ -707,7 +726,7 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
       </button>
 
       {/* Bottom Fixed Action Bar */}
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-3.5 z-30 shadow-lg">
+      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-3.5 z-50 shadow-2xl">
         <div className="max-w-md mx-auto">
           <button
             onClick={handleConfirmRecharge}
@@ -716,7 +735,7 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
           >
             <ArrowUpRight className="w-5 h-5" />
             <span>
-              {generatingAccount ? "Generating Reserved Account..." : `Confirm recharge ₦${selectedAmount.toLocaleString()}`}
+              {generatingAccount ? "Generating Reserved Account..." : `Confirm recharge ₦${(selectedAmount || 0).toLocaleString()}`}
             </span>
           </button>
         </div>

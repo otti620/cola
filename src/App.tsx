@@ -394,9 +394,7 @@ export default function App() {
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full mx-auto py-3 relative z-10 ${
-        activeTab === "mine" || activeTab === "vip" ? "px-0 sm:px-4 md:px-8 max-w-none" : "max-w-7xl px-4"
-      }`}>
+      <main className="flex-1 w-full mx-auto py-2 px-1 sm:px-3 relative z-10 max-w-2xl min-h-[calc(100vh-60px)]">
         
         {activeTab === "home" && (
           <HomeTab 
@@ -473,6 +471,7 @@ export default function App() {
         {activeTab === "team" && (
           <TeamTab 
             user={user}
+            onUpdateUser={handleUpdateUser}
           />
         )}
 
@@ -499,63 +498,65 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 py-2 px-4 shadow-md">
-        <div className="max-w-md mx-auto flex items-center justify-around">
-          
-          <button
-            onClick={() => { setMineActiveView("none"); setActiveTab("home"); }}
-            className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
-              activeTab === "home" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
-            }`}
-          >
-            <Home className="w-6 h-6 shrink-0" />
-            <span className="text-xs">Home</span>
-          </button>
-
-          <button
-            onClick={() => { setMineActiveView("none"); setActiveTab("vip"); }}
-            className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
-              activeTab === "vip" || activeTab === "task" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
-            }`}
-          >
-            <Store className="w-6 h-6 shrink-0" />
-            <span className="text-xs">Products</span>
-          </button>
-
-          <button
-            onClick={() => { setMineActiveView("none"); setActiveTab("team"); }}
-            className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
-              activeTab === "team" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
-            }`}
-          >
-            <Users className="w-6 h-6 shrink-0" />
-            <span className="text-xs">Team</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab("mine"); }}
-            className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
-              activeTab === "mine" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
-            }`}
-          >
-            <User className="w-6 h-6 shrink-0" />
-            <span className="text-xs">Profile</span>
-          </button>
-
-          {isUserAdmin(user.phone) && (
+      {mineActiveView === "none" && (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 py-2 px-4 shadow-md">
+          <div className="max-w-md mx-auto flex items-center justify-around">
+            
             <button
-              onClick={() => setActiveTab("admin")}
+              onClick={() => { setMineActiveView("none"); setActiveTab("home"); }}
               className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
-                activeTab === "admin" ? "text-[#c83a00] font-bold" : "text-amber-500 hover:text-amber-600 font-medium"
+                activeTab === "home" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
               }`}
             >
-              <ShieldCheck className="w-6 h-6 shrink-0" />
-              <span className="text-xs">Admin</span>
+              <Home className="w-6 h-6 shrink-0" />
+              <span className="text-xs">Home</span>
             </button>
-          )}
 
-        </div>
-      </nav>
+            <button
+              onClick={() => { setMineActiveView("none"); setActiveTab("vip"); }}
+              className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
+                activeTab === "vip" || activeTab === "task" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
+              }`}
+            >
+              <Store className="w-6 h-6 shrink-0" />
+              <span className="text-xs">Products</span>
+            </button>
+
+            <button
+              onClick={() => { setMineActiveView("none"); setActiveTab("team"); }}
+              className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
+                activeTab === "team" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
+              }`}
+            >
+              <Users className="w-6 h-6 shrink-0" />
+              <span className="text-xs">Team</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab("mine"); }}
+              className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
+                activeTab === "mine" ? "text-[#c83a00] font-bold" : "text-slate-400 hover:text-slate-600 font-medium"
+              }`}
+            >
+              <User className="w-6 h-6 shrink-0" />
+              <span className="text-xs">Profile</span>
+            </button>
+
+            {isUserAdmin(user.phone) && (
+              <button
+                onClick={() => setActiveTab("admin")}
+                className={`flex flex-col items-center space-y-0.5 text-center transition-all ${
+                  activeTab === "admin" ? "text-[#c83a00] font-bold" : "text-amber-500 hover:text-amber-600 font-medium"
+                }`}
+              >
+                <ShieldCheck className="w-6 h-6 shrink-0" />
+                <span className="text-xs">Admin</span>
+              </button>
+            )}
+
+          </div>
+        </nav>
+      )}
 
       <ChatFAB />
     </div>

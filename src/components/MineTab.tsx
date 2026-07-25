@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import RechargeView from "./RechargeView";
 import WithdrawView from "./WithdrawView";
+import TransactionHistoryView from "./TransactionHistoryView";
 import { UserProfile, TransactionRecord } from "../types";
 import { INVESTMENT_TIERS } from "../data";
 import { db, auth } from "../lib/firebase";
@@ -107,11 +108,14 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
 
   // Firestore transaction logs state
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [txLoading, setTxLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    const targetUid = auth.currentUser?.uid || user.uid;
+    if (!targetUid) return;
     
-    const transRef = collection(db, "users", auth.currentUser.uid, "transactions");
+    setTxLoading(true);
+    const transRef = collection(db, "users", targetUid, "transactions");
     const q = query(transRef, orderBy("timestamp", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -120,6 +124,10 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
         id: doc.id
       })) as TransactionRecord[];
       setTransactions(txs);
+      setTxLoading(false);
+    }, (error) => {
+      console.error("Error subscribing to Firestore transactions:", error);
+      setTxLoading(false);
     });
 
     return () => unsubscribe();
@@ -454,6 +462,7 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
         onBack={() => setActiveView("none")}
         onUpdateUser={onUpdateUser}
         onSuccess={() => setActiveView("withdraw_records")}
+        onNavigateToRecharge={() => setActiveView("deposit")}
       />
     );
   }
@@ -739,6 +748,20 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
             <h3 className="text-[11px] font-bold text-gray-400 tracking-wider uppercase px-1">HISTORY</h3>
             <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100 shadow-2xs overflow-hidden">
               <button
+                onClick={() => setActiveView("transaction_history")}
+                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50/80 transition cursor-pointer bg-amber-50/20"
+              >
+                <div className="flex items-center space-x-3">
+                  <History className="w-5 h-5 text-[#D9381E] stroke-[2]" />
+                  <div>
+                    <span className="text-sm font-bold text-gray-900 block">Transaction History</span>
+                    <span className="text-[10px] text-gray-500 font-medium">All deposits and cashout records</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </button>
+
+              <button
                 onClick={() => setActiveView("topup_records")}
                 className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50/80 transition cursor-pointer"
               >
@@ -997,125 +1020,18 @@ export default function MineTab({ user, onUpdateUser, activeView: propActiveView
               </div>
             )}
 
-            {/* TOP UP RECORDS VIEW */}
-            {activeView === "topup_records" && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 border-b border-gray-100 pb-3">
-                  <Receipt className="w-6 h-6 text-[#D9381E]" />
-                  <h2 className="text-base font-bold text-gray-900 font-display">Recharge History</h2>
-                </div>
-
-                <div className="space-y-2.5 max-h-[340px] overflow-y-auto">
-                  {transactions.filter(t => t.type === "deposit" && !t.details?.includes("Check")).map((t) => (
-                    <div key={t.id} className="bg-gray-50 border border-gray-100 p-3 rounded-xl flex justify-between items-center text-xs font-mono">
-                      <div>
-                        <div className="font-bold text-gray-800">Deposit ID: {t.id.slice(0, 8)}</div>
-                        <div className="text-[10px] text-gray-400 mt-1">{t.timestamp}</div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-emerald-600 font-bold block">₦{t.amount.toLocaleString()}</span>
-                        <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-100 text-[8px] font-bold px-1.5 py-0.5 rounded mt-1 uppercase">
-                          {t.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {transactions.filter(t => t.type === "deposit" && !t.details?.includes("Check")).length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-xs font-mono">No recharge records found.</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* WITHDRAW RECORDS VIEW */}
-            {activeView === "withdraw_records" && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 border-b border-gray-100 pb-3">
-                  <FileText className="w-6 h-6 text-[#D9381E]" />
-                  <h2 className="text-base font-bold text-gray-900 font-display">Withdrawal History</h2>
-                </div>
-
-                <div className="space-y-3 max-h-[340px] overflow-y-auto">
-                  {transactions.filter(t => t.type === "withdraw").map((t) => {
-                    const amount = t.amount || 0;
-                    const fee = t.fee !== undefined ? t.fee : amount * 0.18;
-                    const payoutAmount = t.payoutAmount !== undefined ? t.payoutAmount : amount - fee;
-
-                    return (
-                      <div key={t.id} className="bg-gray-50 border border-gray-100 p-3.5 rounded-xl space-y-2 text-xs font-mono">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <div className="font-bold text-gray-800">Payout ID: {t.id.slice(0, 8)}</div>
-                            <div className="text-[10px] text-gray-400 mt-0.5">{t.timestamp}</div>
-                          </div>
-                          <div className="text-right">
-                            <span className={`inline-block px-1.5 py-0.5 text-[8px] font-bold rounded uppercase border ${
-                              t.status === "approved"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : t.status === "declined"
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
-                            }`}>
-                              {t.status || "pending"}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="border-t border-gray-200/50 pt-2 grid grid-cols-3 gap-2 text-[10px] text-center">
-                          <div>
-                            <span className="block text-gray-400 font-bold">Amount</span>
-                            <span className="text-gray-800 font-bold">₦{amount.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            <span className="block text-gray-400 font-bold">Fee</span>
-                            <span className="text-rose-600 font-bold">-₦{fee.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            <span className="block text-gray-400 font-bold">Payout</span>
-                            <span className="text-emerald-600 font-black">₦{payoutAmount.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {transactions.filter(t => t.type === "withdraw").length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-xs font-mono">No withdrawal records found.</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* DETAILED BILL VIEW */}
-            {activeView === "detailed_bill" && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 border-b border-gray-100 pb-3">
-                  <ClipboardList className="w-6 h-6 text-[#D9381E]" />
-                  <h2 className="text-base font-bold text-gray-900 font-display">Fund Flow / Ledger</h2>
-                </div>
-
-                <div className="space-y-2.5 max-h-[340px] overflow-y-auto">
-                  {transactions.map((t) => {
-                    return (
-                      <div key={t.id} className="bg-gray-50 border border-gray-100 p-3 rounded-xl space-y-1 text-xs font-mono">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-800">{t.type.toUpperCase()}</span>
-                          <span className={`font-black ${t.type === "deposit" ? "text-emerald-600" : "text-rose-600"}`}>
-                            {t.type === "deposit" ? "+" : "-"} ₦{t.amount.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-gray-500 leading-relaxed truncate">{t.details || "Transaction entry"}</div>
-                        <div className="text-[9px] text-gray-400 pt-1 flex justify-between">
-                          <span>{t.timestamp}</span>
-                          <span className="uppercase text-emerald-600 font-bold">{t.status}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {transactions.length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-xs font-mono">Your transaction ledger is empty.</div>
-                  )}
-                </div>
-              </div>
+            {/* TRANSACTION HISTORY VIEW & RECORDS */}
+            {(activeView === "transaction_history" || activeView === "topup_records" || activeView === "withdraw_records" || activeView === "detailed_bill") && (
+              <TransactionHistoryView
+                transactions={transactions}
+                loading={txLoading}
+                initialFilter={
+                  activeView === "topup_records" ? "deposit" :
+                  activeView === "withdraw_records" ? "withdraw" : "all"
+                }
+                onNavigateToDeposit={() => setActiveView("deposit")}
+                onNavigateToWithdraw={() => setActiveView("withdraw")}
+              />
             )}
 
             {/* MY PRODUCTS / MY FUNDS VIEW */}

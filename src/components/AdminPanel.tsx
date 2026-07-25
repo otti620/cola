@@ -57,6 +57,25 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   
   // Promo Code
   const [promoCode, setPromoCode] = useState(localStorage.getItem("dailyPromoCode") || "COCA2026");
+  const [isProcessingReturns, setIsProcessingReturns] = useState(false);
+
+  const triggerDailyReturnEngine = async () => {
+    setIsProcessingReturns(true);
+    try {
+      const res = await fetch("/api/cron/process-daily-returns", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast(`✅ Daily Return Engine complete! Credited ₦${(data.totalPayoutAmount || 0).toLocaleString()} across ${data.dividendsCredited || 0} active plans.`);
+      } else {
+        toast("⚠️ Daily Return Engine executed with partial updates.");
+      }
+    } catch (err) {
+      console.error("Return Engine Error:", err);
+      toast("❌ Failed to reach Daily Return Engine service.");
+    } finally {
+      setIsProcessingReturns(false);
+    }
+  };
 
   // Browser push notification state
   const [notificationsEnabled, setNotificationsEnabled] = useState(
@@ -478,6 +497,15 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={triggerDailyReturnEngine}
+              disabled={isProcessingReturns}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold text-xs px-3.5 py-2 rounded-xl border border-emerald-400 flex items-center gap-1.5 cursor-pointer shadow-md transition"
+            >
+              <RefreshCw className={`w-4 h-4 ${isProcessingReturns ? "animate-spin" : ""}`} />
+              <span>{isProcessingReturns ? "Processing Returns..." : "Run Daily Return Engine"}</span>
+            </button>
+
             <button
               onClick={handleToggleNotifications}
               className={`text-xs font-bold px-3.5 py-2 rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${

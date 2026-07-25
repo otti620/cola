@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
+import { processDailyReturns } from "./src/server/dailyReturnEngine";
 
 dotenv.config();
 
@@ -11,6 +12,39 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Scheduled Cloud Trigger / Interval Cron Endpoint for Daily Returns
+  app.all("/api/cron/process-daily-returns", async (req, res) => {
+    try {
+      const result = await processDailyReturns();
+      res.json({
+        message: "Daily Return Engine execution completed.",
+        ...result
+      });
+    } catch (err: any) {
+      console.error("Cron Error processing daily returns:", err);
+      res.status(500).json({ error: "Failed to process daily returns", details: err?.message });
+    }
+  });
+
+  // Start background interval worker (Runs every 1 hour, checking for 24-hour mature daily dividend cycles)
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      await processDailyReturns();
+    } catch (e) {
+      console.error("Background interval error processing daily returns:", e);
+    }
+  }, ONE_HOUR_MS);
+
+  // Run initial trigger check on server startup after 10 seconds
+  setTimeout(async () => {
+    try {
+      await processDailyReturns();
+    } catch (e) {
+      console.error("Startup trigger error processing daily returns:", e);
+    }
+  }, 10000);
 
   // API Chat Endpoint
   app.post("/api/chat", async (req, res) => {

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { 
-  ChevronLeft, AlertTriangle, Headphones, Plus, CreditCard, CheckCircle2, X, ArrowUp, Sparkles, Check, Building2
+  ChevronLeft, AlertTriangle, Headphones, Plus, CreditCard, CheckCircle2, X, ArrowUp, Sparkles, Check, Building2, Lock, Wallet
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { NIGERIAN_BANKS, predictBankFromNuban, resolveNubanAccount, BankInfo } from "../utils/nuban";
 import { notifyToast } from "../utils/toast";
 
@@ -13,14 +13,19 @@ interface WithdrawViewProps {
   onBack: () => void;
   onUpdateUser?: (updated: UserProfile) => void;
   onSuccess?: () => void;
+  onNavigateToRecharge?: () => void;
 }
 
 const PRESET_WITHDRAWALS = [1200, 5000, 20000, 50000, 100000];
 
-export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: WithdrawViewProps) {
+export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, onNavigateToRecharge }: WithdrawViewProps) {
   const [selectedAmount, setSelectedAmount] = useState<number | "">(1200);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   
+  // Deposit verification state
+  const [hasMadeDeposit, setHasMadeDeposit] = useState<boolean>(true);
+  const [checkingDepositStatus, setCheckingDepositStatus] = useState<boolean>(true);
+
   // Bank details form
   const [bankName, setBankName] = useState(user.bankName || "");
   const [accountNumber, setAccountNumber] = useState(user.bankAccount || "");
@@ -36,6 +41,41 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
   const [withdrawalSuccess, setWithdrawalSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showSupportModal, setShowSupportModal] = useState(false);
+
+  // Check deposit requirement for withdrawals
+  useEffect(() => {
+    const checkDepositHistory = async () => {
+      try {
+        const uid = auth.currentUser?.uid || user.uid;
+        if (!uid) {
+          setCheckingDepositStatus(false);
+          return;
+        }
+
+        if ((user as any).totalDeposit && (user as any).totalDeposit > 0) {
+          setHasMadeDeposit(true);
+          setCheckingDepositStatus(false);
+          return;
+        }
+
+        const transRef = collection(db, "users", uid, "transactions");
+        const q = query(transRef, where("type", "==", "deposit"));
+        const snap = await getDocs(q);
+
+        if (!snap.empty) {
+          setHasMadeDeposit(true);
+        } else {
+          setHasMadeDeposit(false);
+        }
+      } catch (e) {
+        console.warn("Deposit check error:", e);
+        setHasMadeDeposit(false);
+      } finally {
+        setCheckingDepositStatus(false);
+      }
+    };
+    checkDepositHistory();
+  }, [user]);
 
   const currentBankCard = user.bankAccount ? {
     bankName: user.bankName || "Bank Account",
@@ -107,7 +147,13 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
 
   const handleConfirmWithdrawal = async () => {
     setErrorMessage("");
-    const amt = typeof selectedAmount === "number" ? selectedAmount : parseFloat(selectedAmount);
+
+    if (!hasMadeDeposit) {
+      setErrorMessage("You must complete at least one deposit (minimum ₦3,000) before you can place a withdrawal request.");
+      return;
+    }
+
+    const amt = typeof selectedAmount === "number" ? selectedAmount : parseFloat(selectedAmount as string);
 
     if (!amt || isNaN(amt)) {
       setErrorMessage("Please select or enter a valid amount.");
@@ -176,15 +222,17 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
     }
   };
 
+  const parsedAmt = typeof selectedAmount === "number" ? selectedAmount : parseFloat(selectedAmount as string);
   const isFormValid = !!(
-    selectedAmount && 
-    typeof selectedAmount === "number" && 
-    selectedAmount >= 1200 && 
+    hasMadeDeposit &&
+    parsedAmt && 
+    !isNaN(parsedAmt) && 
+    parsedAmt >= 1200 && 
     user.bankAccount
   );
 
   return (
-    <div className="min-h-screen bg-[#f8f7f5] pb-28 font-sans animate-fade-in relative">
+    <div className="min-h-screen bg-[#f8f7f5] pb-36 font-sans animate-fade-in relative">
       
       {/* Top Header Bar */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-4 flex items-center justify-between shadow-xs">
@@ -195,17 +243,71 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-lg font-bold text-slate-900 tracking-tight font-display">
-          Withdraw
+          Withdraw Funds
         </h1>
         <div className="w-8" />
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-5">
 
-        {/* Card 1: Amount Selection & Preset Grid */}
+        {/* Deposit Requirement Warning Banner */}
+        {!hasMadeDeposit && !checkingDepositStatus && (
+          <div className="bg-amber-50 rounded-3xl p-5 border border-amber-200 text-amber-900 space-y-3 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-extrabold text-amber-950">Deposit Verification Required</h3>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  To protect partner accounts, you must make at least one initial deposit (minimum ₦3,000) before you can initiate withdrawal payouts.
+                </p>
+              </div>
+            </div>
+
+            {onNavigateToRecharge && (
+              <button
+                onClick={onNavigateToRecharge}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Wallet className="w-4 h-4" />
+                <span>Recharge Account Now</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Card 1: Amount Selection & Custom Input */}
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500 font-medium">Withdrawal Amount</p>
+            <span className="text-[10px] font-mono text-slate-400">Min: ₦1,200</span>
+          </div>
+
+          {/* Editable Custom Withdrawal Input */}
+          <div className="bg-[#fff2ed]/70 rounded-2xl p-4 text-center border border-[#ffccd0]/70 space-y-2">
+            <div className="flex items-center justify-center space-x-1">
+              <span className="text-2xl sm:text-3xl font-black text-[#c83a00]">₦</span>
+              <input
+                type="number"
+                value={selectedAmount === "" ? "" : selectedAmount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedAmount(val === "" ? "" : Number(val));
+                  setErrorMessage("");
+                }}
+                placeholder="1200"
+                min={1200}
+                className="bg-white text-2xl sm:text-3xl font-black text-[#c83a00] text-center w-full max-w-[220px] px-3 py-1.5 rounded-xl border border-[#ffccd0] focus:outline-none focus:ring-2 focus:ring-[#c83a00] shadow-xs"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Type custom withdrawal amount or tap a preset chip below
+            </p>
+          </div>
+
           <p className="text-center text-xs text-slate-400 font-mono">
-            ₦1,200~₦1,000,000
+            ₦1,200 ~ ₦1,000,000
           </p>
 
           {/* Preset Buttons Grid (3 cols) */}
@@ -220,20 +322,20 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
                     setSelectedAmount(amt);
                     setErrorMessage("");
                   }}
-                  className={`py-3 px-2 rounded-xl text-sm font-semibold transition cursor-pointer active:scale-95 ${
+                  className={`py-3 px-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer active:scale-95 ${
                     isSelected
                       ? "bg-white text-[#c83a00] border-2 border-[#c83a00] shadow-xs font-bold"
                       : "bg-white text-slate-800 border border-slate-300 hover:border-slate-400 font-medium"
                   }`}
                 >
-                  {amt.toLocaleString()}
+                  ₦{amt.toLocaleString()}
                 </button>
               );
             })}
           </div>
 
           {errorMessage && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs text-center font-medium">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs text-center font-bold">
               {errorMessage}
             </div>
           )}
@@ -329,7 +431,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess }: 
       </button>
 
       {/* Bottom Fixed Action Bar */}
-      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-4 z-30 shadow-lg space-y-1.5 text-center">
+      <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-4 z-50 shadow-2xl space-y-1.5 text-center">
         <div className="max-w-md mx-auto space-y-1.5">
           <button
             onClick={handleConfirmWithdrawal}

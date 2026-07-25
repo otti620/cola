@@ -75,8 +75,26 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
         details: `Investment Purchase: ${plan.name}`,
         createdAt: serverTimestamp()
       });
+
+      const investRef = collection(db, "users", user.uid, "investments");
+      await addDoc(investRef, {
+        id: "inv_" + Math.random().toString(36).substring(2, 8),
+        planId: plan.id,
+        planName: plan.name,
+        amountInvested: plan.price,
+        dailyInterestRate: plan.dailyReward / plan.price,
+        dailyReward: plan.dailyReward,
+        durationDays: plan.durationDays || 100,
+        daysRemaining: plan.durationDays || 100,
+        accumulatedProfit: 0,
+        startDate: new Date().toLocaleDateString("en-NG"),
+        lastPayoutAt: Date.now(),
+        endDate: new Date(Date.now() + 86400000 * (plan.durationDays || 100)).toLocaleDateString("en-NG"),
+        status: "active",
+        createdAt: serverTimestamp()
+      });
     } catch (e) {
-      console.error("Error saving transaction:", e);
+      console.error("Error saving investment transaction:", e);
     }
 
     setSelectedPlan(null);

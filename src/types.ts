@@ -53,9 +53,11 @@ export interface TransactionRecord {
   id: string;
   type: "deposit" | "withdraw";
   amount: number;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | string;
   timestamp: string;
   details?: string;
+  fee?: number;
+  payoutAmount?: number;
 }
 
 export interface CareemNewsItem {
