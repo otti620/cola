@@ -8,7 +8,7 @@ import { UserProfile, InvestmentTier, CareemTask } from "../types";
 import { INVESTMENT_TIERS } from "../data";
 import { db } from "../lib/firebase";
 import { 
-  collection, doc, updateDoc, onSnapshot, getDoc, getDocs, 
+  collection, collectionGroup, limit, doc, updateDoc, onSnapshot, getDoc, getDocs, 
   setDoc, addDoc, query, where, orderBy, deleteDoc, serverTimestamp 
 } from "firebase/firestore";
 import { notifyToast } from "../utils/toast";
@@ -50,7 +50,11 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
     depositBankAccount: "0120122888",
     depositAccountHolder: "TITAN DIGITAL SYSTEMS LIMITED",
     serverStatus: "Online",
-    companyReserves: 75000000
+    companyReserves: 75000000,
+    signupsEnabled: true,
+    loginsEnabled: true,
+    withdrawalsEnabled: true,
+    depositsEnabled: true
   });
 
   // UI state
@@ -180,80 +184,108 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
     toast(`New daily promo code generated: ${code}`);
   };
 
+  // On mount, load initial users & txs from localStorage for instant offline/cached display
+  useEffect(() => {
+    const cachedUsers = localStorage.getItem("careem_invest_users");
+    if (cachedUsers) {
+      try {
+        setAllUsers(JSON.parse(cachedUsers));
+      } catch (e) {}
+    }
+    const cachedTxs = localStorage.getItem("careem_invest_all_txs");
+    if (cachedTxs) {
+      try {
+        setPendingTxs(JSON.parse(cachedTxs));
+      } catch (e) {}
+    }
+  }, []);
+
   // Real-time Firestore Users Listener
   useEffect(() => {
     if (!user || !user.uid) return;
-    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      const usersList: UserProfile[] = [];
-      snapshot.docs.forEach((docSnap) => {
-        const u = docSnap.data() as UserProfile;
-        const profile = { ...u, uid: docSnap.id };
-        if (profile.uid !== user.uid) {
-          usersList.push(profile);
-        }
+    let unsubUsers: (() => void) | null = null;
+    try {
+      unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+        const usersList: UserProfile[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const u = docSnap.data() as UserProfile;
+          const profile = { ...u, uid: docSnap.id };
+          if (profile.uid !== user.uid) {
+            usersList.push(profile);
+          }
+        });
+        setAllUsers(usersList);
+        localStorage.setItem("careem_invest_users", JSON.stringify(usersList));
+      }, (err) => {
+        console.warn("Firestore users listener notice (using cached users):", err?.message || err);
       });
-      setAllUsers(usersList);
-      localStorage.setItem("careem_invest_users", JSON.stringify(usersList));
-    }, (err) => {
-      console.error("Error listening to users collection:", err);
-    });
+    } catch (e) {
+      console.warn("Error setting up users listener:", e);
+    }
 
-    return () => unsubUsers();
+    return () => {
+      if (unsubUsers) unsubUsers();
+    };
   }, [user.uid]);
 
-  // Real-time Firestore Transactions Listener across all users
+  // Real-time Firestore Transactions Listener using collectionGroup (Single Query, no re-subscription loop)
   useEffect(() => {
-    if (allUsers.length === 0) return;
-    const unsubscribes: (() => void)[] = [];
-    const allTxsMap: Record<string, any> = {};
+    if (!user || !user.uid) return;
 
-    allUsers.forEach((u) => {
-      if (!u.uid) return;
-      try {
-        const transRef = collection(db, "users", u.uid, "transactions");
-        const unsub = onSnapshot(transRef, (snap) => {
-          snap.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            const txObj = {
-              ...data,
-              id: docSnap.id,
-              userUid: u.uid,
-              userPhone: u.phone || "Unknown Phone",
-              userFullName: u.fullName || "Investor Partner"
-            };
-            allTxsMap[docSnap.id] = txObj;
+    let unsubTxs: (() => void) | null = null;
+    try {
+      const q = query(collectionGroup(db, "transactions"), limit(150));
+      unsubTxs = onSnapshot(q, (snap) => {
+        const txList: any[] = [];
+        snap.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const parentUid = docSnap.ref.parent.parent?.id || data.userId || data.userUid;
+          const matchingUser = allUsers.find(u => u.uid === parentUid || u.phone === data.userPhone);
+          
+          const txObj = {
+            ...data,
+            id: docSnap.id,
+            userUid: parentUid || data.userUid || "",
+            userPhone: data.userPhone || matchingUser?.phone || "Unknown Phone",
+            userFullName: data.userFullName || matchingUser?.fullName || "Investor Partner"
+          };
+          txList.push(txObj);
 
-            // Trigger real-time browser alerts for new pending requests
-            if (data.status === "pending") {
-              if (!isInitialLoadRef.current && !notifiedTxIdsRef.current.has(docSnap.id)) {
-                notifiedTxIdsRef.current.add(docSnap.id);
-                const txType = data.type === "deposit" ? "DEPOSIT" : "WITHDRAWAL";
-                const amountFormatted = `₦${Number(data.amount || 0).toLocaleString()}`;
-                sendBrowserNotification(
-                  `⚠️ Action Required: ${txType} Request`,
-                  `${u.phone} (${u.fullName || "Partner"}) requested ${amountFormatted}. Click to approve.`
-                );
-              } else {
-                notifiedTxIdsRef.current.add(docSnap.id);
-              }
+          if (data.status === "pending") {
+            if (!isInitialLoadRef.current && !notifiedTxIdsRef.current.has(docSnap.id)) {
+              notifiedTxIdsRef.current.add(docSnap.id);
+              const txType = data.type === "deposit" ? "DEPOSIT" : "WITHDRAWAL";
+              const amountFormatted = `₦${Number(data.amount || 0).toLocaleString()}`;
+              sendBrowserNotification(
+                `⚠️ Action Required: ${txType} Request`,
+                `${txObj.userPhone} (${txObj.userFullName}) requested ${amountFormatted}. Click to approve.`
+              );
+            } else {
+              notifiedTxIdsRef.current.add(docSnap.id);
             }
-          });
-
-          const sortedList = Object.values(allTxsMap).sort((a: any, b: any) => {
-            const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
-            const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
-            return timeB - timeA;
-          });
-          setPendingTxs(sortedList);
+          }
         });
-        unsubscribes.push(unsub);
-      } catch (err) {
-        console.error("Transaction snapshot error for user:", u.uid, err);
-      }
-    });
 
-    return () => unsubscribes.forEach(unsub => unsub());
-  }, [allUsers]);
+        // Client-side sort by newest
+        const sorted = txList.sort((a, b) => {
+          const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+          const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+          return timeB - timeA;
+        });
+
+        setPendingTxs(sorted);
+        localStorage.setItem("careem_invest_all_txs", JSON.stringify(sorted));
+      }, (err) => {
+        console.warn("Transactions snapshot notice (using cached transactions):", err?.message || err);
+      });
+    } catch (err) {
+      console.warn("Transactions query subscription error:", err);
+    }
+
+    return () => {
+      if (unsubTxs) unsubTxs();
+    };
+  }, [user.uid, allUsers.length]);
 
   // Load configuration and product tiers on mount
   useEffect(() => {
@@ -272,11 +304,22 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   };
 
   const loadSystemRules = () => {
-    const rulesStr = localStorage.getItem("cocacola_config_rules");
+    const rulesStr = localStorage.getItem("careem_invest_config_rules") || localStorage.getItem("cocacola_config_rules");
     if (rulesStr) {
       try {
         setSystemRules(prev => ({ ...prev, ...JSON.parse(rulesStr) }));
       } catch (e) {}
+    }
+    try {
+      onSnapshot(doc(db, "system", "rules"), (snap) => {
+        if (snap.exists()) {
+          setSystemRules(prev => ({ ...prev, ...snap.data() }));
+        }
+      }, (err) => {
+        console.warn("System rules snapshot notice:", err?.message || err);
+      });
+    } catch (e) {
+      console.warn("Error setting up system rules listener:", e);
     }
   };
 
@@ -619,10 +662,16 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   };
 
   // --- SYSTEM RULES SAVE ---
-  const handleSaveSystemRules = (e: React.FormEvent) => {
+  const handleSaveSystemRules = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("careem_invest_config_rules", JSON.stringify(systemRules));
-    toast("System banking and payout rules saved!");
+    localStorage.setItem("cocacola_config_rules", JSON.stringify(systemRules));
+    try {
+      await setDoc(doc(db, "system", "rules"), systemRules, { merge: true });
+    } catch (e) {
+      console.warn("Firestore sync system rules notice:", e);
+    }
+    toast("System operational rules and access toggles saved & broadcasted!");
   };
 
   const handleWipeNonCareemUsers = async () => {
@@ -1292,6 +1341,113 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
           </div>
 
           <form onSubmit={handleSaveSystemRules} className="space-y-5 max-w-2xl">
+            {/* --- SYSTEM OPERATIONAL TOGGLES (Emergency / Maintenance Controls) --- */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-amber-600" />
+                    <span>System Operational & Gateway Access Controls</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">Toggle signups, logins, withdrawals, or deposits system-wide with instant effect.</p>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                {/* 1. Signups Toggle */}
+                <div className={`p-3 rounded-xl border transition flex items-center justify-between ${
+                  systemRules.signupsEnabled !== false ? "bg-emerald-50/70 border-emerald-200" : "bg-rose-50/70 border-rose-200"
+                }`}>
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">User Signups</span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {systemRules.signupsEnabled !== false ? "Registration open" : "Signups blocked"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSystemRules(prev => ({ ...prev, signupsEnabled: prev.signupsEnabled === false ? true : false }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                      systemRules.signupsEnabled !== false 
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                        : "bg-rose-600 text-white hover:bg-rose-700"
+                    }`}
+                  >
+                    {systemRules.signupsEnabled !== false ? "ENABLED" : "OFF / DISABLED"}
+                  </button>
+                </div>
+
+                {/* 2. Logins Toggle */}
+                <div className={`p-3 rounded-xl border transition flex items-center justify-between ${
+                  systemRules.loginsEnabled !== false ? "bg-emerald-50/70 border-emerald-200" : "bg-rose-50/70 border-rose-200"
+                }`}>
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">User Logins</span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {systemRules.loginsEnabled !== false ? "Logins active" : "Logins paused (Admin exempt)"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSystemRules(prev => ({ ...prev, loginsEnabled: prev.loginsEnabled === false ? true : false }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                      systemRules.loginsEnabled !== false 
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                        : "bg-rose-600 text-white hover:bg-rose-700"
+                    }`}
+                  >
+                    {systemRules.loginsEnabled !== false ? "ENABLED" : "OFF / DISABLED"}
+                  </button>
+                </div>
+
+                {/* 3. Withdrawals Toggle */}
+                <div className={`p-3 rounded-xl border transition flex items-center justify-between ${
+                  systemRules.withdrawalsEnabled !== false ? "bg-emerald-50/70 border-emerald-200" : "bg-rose-50/70 border-rose-200"
+                }`}>
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">Cash Withdrawals</span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {systemRules.withdrawalsEnabled !== false ? "Cashouts open" : "Withdrawals paused"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSystemRules(prev => ({ ...prev, withdrawalsEnabled: prev.withdrawalsEnabled === false ? true : false }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                      systemRules.withdrawalsEnabled !== false 
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                        : "bg-rose-600 text-white hover:bg-rose-700"
+                    }`}
+                  >
+                    {systemRules.withdrawalsEnabled !== false ? "ENABLED" : "OFF / DISABLED"}
+                  </button>
+                </div>
+
+                {/* 4. Deposits Toggle */}
+                <div className={`p-3 rounded-xl border transition flex items-center justify-between ${
+                  systemRules.depositsEnabled !== false ? "bg-emerald-50/70 border-emerald-200" : "bg-rose-50/70 border-rose-200"
+                }`}>
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">Account Deposits</span>
+                    <span className="text-[10px] text-slate-500 block">
+                      {systemRules.depositsEnabled !== false ? "Deposits open" : "Deposits paused"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSystemRules(prev => ({ ...prev, depositsEnabled: prev.depositsEnabled === false ? true : false }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                      systemRules.depositsEnabled !== false 
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                        : "bg-rose-600 text-white hover:bg-rose-700"
+                    }`}
+                  >
+                    {systemRules.depositsEnabled !== false ? "ENABLED" : "OFF / DISABLED"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Deposit Settlement Bank Name</label>

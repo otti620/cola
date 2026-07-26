@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, Handshake, Coins } from "lucide-react";
+import { Eye, EyeOff, Handshake, Coins, ShieldAlert } from "lucide-react";
 import { UserProfile } from "../types";
 import { auth, db } from "../lib/firebase";
 import { 
@@ -8,7 +8,7 @@ import {
   updatePassword,
   signOut,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, onSnapshot } from "firebase/firestore";
 
 interface AuthModalProps {
   onSuccess: (user: UserProfile) => void;
@@ -26,6 +26,41 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // System Access Controls State
+  const [signupsEnabled, setSignupsEnabled] = useState(true);
+  const [loginsEnabled, setLoginsEnabled] = useState(true);
+
+  // Listen to system rules from Firestore or local storage cache
+  useEffect(() => {
+    const cachedStr = localStorage.getItem("careem_invest_config_rules") || localStorage.getItem("cocacola_config_rules");
+    if (cachedStr) {
+      try {
+        const parsed = JSON.parse(cachedStr);
+        if (typeof parsed.signupsEnabled === "boolean") setSignupsEnabled(parsed.signupsEnabled);
+        if (typeof parsed.loginsEnabled === "boolean") setLoginsEnabled(parsed.loginsEnabled);
+      } catch (e) {}
+    }
+
+    let unsub: (() => void) | null = null;
+    try {
+      unsub = onSnapshot(doc(db, "system", "rules"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (typeof data.signupsEnabled === "boolean") setSignupsEnabled(data.signupsEnabled);
+          if (typeof data.loginsEnabled === "boolean") setLoginsEnabled(data.loginsEnabled);
+        }
+      }, (err) => {
+        console.warn("Rules snapshot notice in AuthModal:", err?.message || err);
+      });
+    } catch (e) {
+      console.warn("Error subscribing to system rules in AuthModal:", e);
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -88,6 +123,20 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
     const cleanPhone = phone.trim().replace(/^0/, "");
     const fullPhone = `+234${cleanPhone}`;
     const derivedEmail = `${cleanPhone}@careem-invest.com`;
+
+    // Enforce admin toggles
+    if (!isLogin && !signupsEnabled) {
+      setError("New user registrations are currently suspended by system administration.");
+      return;
+    }
+
+    if (isLogin && !loginsEnabled) {
+      const isAdmin = cleanPhone === "8000000000" || cleanPhone === "08000000000" || cleanPhone === "8123456789";
+      if (!isAdmin) {
+        setError("Member logins are temporarily disabled for scheduled system maintenance.");
+        return;
+      }
+    }
 
     setLoading(true);
     try {
@@ -248,6 +297,20 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
         {error && (
           <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs text-center font-medium">
             {error}
+          </div>
+        )}
+
+        {!isLogin && !signupsEnabled && (
+          <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-bold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>New user signups are currently suspended by system administration.</span>
+          </div>
+        )}
+
+        {isLogin && !loginsEnabled && (
+          <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-bold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Member logins are temporarily paused for scheduled maintenance.</span>
           </div>
         )}
 

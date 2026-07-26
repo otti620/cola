@@ -8,6 +8,7 @@ import { COCA_COLA_BRAND_ASSETS } from "../data/brandImages";
 import { db } from "../lib/firebase";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import InvestorPitchDeckModal from "./InvestorPitchDeckModal";
+import CongratulationsModal, { InvestmentUpgradeSuccessDetails } from "./CongratulationsModal";
 
 interface HomeTabProps {
   user: UserProfile;
@@ -33,6 +34,7 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showPitchDeckModal, setShowPitchDeckModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [congratsDetails, setCongratsDetails] = useState<InvestmentUpgradeSuccessDetails | null>(null);
 
   // Live activity ticker based on real user session
   const liveTickerItems = (user.totalProfit > 0 || user.balance > 0)
@@ -126,11 +128,36 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
         details: `Investment Purchase: ${plan.name}`,
         createdAt: serverTimestamp()
       });
+
+      const investRef = collection(db, "users", user.uid, "investments");
+      await addDoc(investRef, {
+        id: "inv_" + Math.random().toString(36).substring(2, 8),
+        planId: plan.id,
+        planName: plan.name,
+        amountInvested: plan.price,
+        dailyInterestRate: plan.dailyReward / plan.price,
+        dailyReward: plan.dailyReward,
+        durationDays: plan.durationDays || 60,
+        daysRemaining: plan.durationDays || 60,
+        accumulatedProfit: 0,
+        startDate: new Date().toLocaleDateString("en-NG"),
+        lastPayoutAt: Date.now(),
+        endDate: new Date(Date.now() + 86400000 * (plan.durationDays || 60)).toLocaleDateString("en-NG"),
+        status: "active",
+        createdAt: serverTimestamp()
+      });
     } catch (e) {
       console.error("Error saving investment transaction:", e);
     }
 
     setSelectedPlan(null);
+    setCongratsDetails({
+      planName: plan.name,
+      amountInvested: plan.price,
+      dailyReward: plan.dailyReward,
+      durationDays: plan.durationDays || 60,
+      tierId: plan.id
+    });
     setToastMessage(`Success! You have invested in ${plan.name}. Daily returns credited!`);
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -516,6 +543,20 @@ export default function HomeTab({ user, onUpdateUser, onNavigateToTab, onNavigat
         isOpen={showPitchDeckModal}
         onClose={() => setShowPitchDeckModal(false)}
         onNavigateToProducts={() => onNavigateToTab("vip")}
+      />
+
+      {/* Congratulations Tier Upgrade Modal */}
+      <CongratulationsModal
+        isOpen={!!congratsDetails}
+        onClose={() => setCongratsDetails(null)}
+        details={congratsDetails}
+        onViewPortfolio={() => {
+          setCongratsDetails(null);
+          if (onNavigateToMineView) {
+            onNavigateToMineView("none");
+          }
+          onNavigateToTab("mine");
+        }}
       />
 
     </div>

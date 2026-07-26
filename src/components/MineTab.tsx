@@ -103,11 +103,13 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
       if (snap.exists()) {
         setRules(prev => ({ ...prev, ...snap.data() }));
       }
+    }, (err) => {
+      console.warn("System rules snapshot notice:", err?.message || err);
     });
     return () => unsubRules();
   }, []);
 
-  // Firestore transaction logs state
+  // Firestore transaction logs & investments state
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [txLoading, setTxLoading] = useState<boolean>(true);
   const [userInvestments, setUserInvestments] = useState<any[]>([]);
@@ -115,6 +117,12 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
   useEffect(() => {
     const targetUid = auth.currentUser?.uid || user.uid;
     if (!targetUid) return;
+
+    // Load initial investments from cache
+    const cachedInv = localStorage.getItem(`user_investments_${targetUid}`);
+    if (cachedInv) {
+      try { setUserInvestments(JSON.parse(cachedInv)); } catch (e) {}
+    }
     
     const investRef = collection(db, "users", targetUid, "investments");
     const unsub = onSnapshot(investRef, (snap) => {
@@ -123,8 +131,9 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       setUserInvestments(list);
+      localStorage.setItem(`user_investments_${targetUid}`, JSON.stringify(list));
     }, (err) => {
-      console.error("Error loading user investments:", err);
+      console.warn("User investments snapshot notice (using local cache):", err?.message || err);
     });
 
     return () => unsub();
@@ -135,6 +144,16 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
     if (!targetUid) return;
     
     setTxLoading(true);
+
+    // Load initial txs from cache
+    const cachedTxs = localStorage.getItem(`user_txs_${targetUid}`);
+    if (cachedTxs) {
+      try {
+        setTransactions(JSON.parse(cachedTxs));
+        setTxLoading(false);
+      } catch (e) {}
+    }
+
     const transRef = collection(db, "users", targetUid, "transactions");
     const q = query(transRef, orderBy("timestamp", "desc"));
     
@@ -144,9 +163,10 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
         id: doc.id
       })) as TransactionRecord[];
       setTransactions(txs);
+      localStorage.setItem(`user_txs_${targetUid}`, JSON.stringify(txs));
       setTxLoading(false);
     }, (error) => {
-      console.error("Error subscribing to Firestore transactions:", error);
+      console.warn("User transactions snapshot notice (using local cache):", error?.message || error);
       setTxLoading(false);
     });
 
@@ -170,6 +190,8 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
         }
       });
       setReferredActiveCount(activeCount);
+    }, (err) => {
+      console.warn("Referred users snapshot notice:", err?.message || err);
     });
     return () => unsubscribe();
   }, [user.referralCode]);

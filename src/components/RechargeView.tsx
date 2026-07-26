@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  ChevronLeft, AlertTriangle, Headphones, Check, Copy, ArrowUpRight, CheckCircle2, X, Clock, RefreshCw, ShieldCheck, Zap, Radio
+  ChevronLeft, AlertTriangle, Headphones, Check, Copy, ArrowUpRight, CheckCircle2, X, Clock, RefreshCw, ShieldCheck, Zap, Radio, ShieldAlert
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { notifyToast } from "../utils/toast";
 
 import { safeCopyToClipboard } from "../utils/clipboard";
@@ -55,6 +55,38 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
   const [copiedRef, setCopiedRef] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
 
+  // Operational System Toggle State
+  const [depositsEnabled, setDepositsEnabled] = useState(true);
+
+  // Subscribe to system rules in Firestore or local storage cache
+  useEffect(() => {
+    const cachedStr = localStorage.getItem("careem_invest_config_rules") || localStorage.getItem("cocacola_config_rules");
+    if (cachedStr) {
+      try {
+        const parsed = JSON.parse(cachedStr);
+        if (typeof parsed.depositsEnabled === "boolean") setDepositsEnabled(parsed.depositsEnabled);
+      } catch (e) {}
+    }
+
+    let unsub: (() => void) | null = null;
+    try {
+      unsub = onSnapshot(doc(db, "system", "rules"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (typeof data.depositsEnabled === "boolean") setDepositsEnabled(data.depositsEnabled);
+        }
+      }, (err) => {
+        console.warn("Rules snapshot notice in RechargeView:", err?.message || err);
+      });
+    } catch (e) {
+      console.warn("Error subscribing to system rules in RechargeView:", e);
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
+
   // Behavioral tracking refs
   const hasCopiedAccRef = useRef(false);
   const hasCopiedRefCodeRef = useRef(false);
@@ -103,6 +135,11 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
   };
 
   const handleConfirmRecharge = () => {
+    if (!depositsEnabled) {
+      alert("Account deposits and wallet recharges are currently paused by system administration.");
+      return;
+    }
+
     if (selectedAmount < 3000) {
       alert("The minimum deposit amount on this platform is ₦3,000.");
       return;
@@ -592,6 +629,19 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
 
       <div className="max-w-md mx-auto p-4 space-y-4">
 
+        {/* Deposits Disabled System Banner */}
+        {!depositsEnabled && (
+          <div className="bg-rose-50 rounded-2xl p-5 border border-rose-200 text-rose-900 space-y-2 shadow-xs">
+            <div className="flex items-center gap-2 text-rose-800 font-extrabold text-sm">
+              <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>Deposits & Recharges Paused</span>
+            </div>
+            <p className="text-xs text-rose-700 leading-relaxed font-medium">
+              Wallet deposit channel is temporarily offline per system administration instructions. Please try again later.
+            </p>
+          </div>
+        )}
+
         {/* Card 1: Available Balance */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs space-y-1">
           <p className="text-xs text-slate-500 font-medium">Available balance</p>
@@ -724,8 +774,12 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
         <div className="max-w-md mx-auto">
           <button
             onClick={handleConfirmRecharge}
-            disabled={generatingAccount}
-            className="w-full bg-[#e41e2b] hover:bg-[#c41622] active:scale-98 text-white font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition shadow-md cursor-pointer disabled:opacity-70"
+            disabled={generatingAccount || !depositsEnabled}
+            className={`w-full font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition shadow-md cursor-pointer ${
+              depositsEnabled && !generatingAccount
+                ? "bg-[#e41e2b] hover:bg-[#c41622] text-white active:scale-98"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+            }`}
           >
             <ArrowUpRight className="w-5 h-5" />
             <span>

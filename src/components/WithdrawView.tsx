@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { 
-  ChevronLeft, AlertTriangle, Headphones, Plus, CreditCard, CheckCircle2, X, ArrowUp, Sparkles, Check, Building2, Lock, Wallet
+  ChevronLeft, AlertTriangle, Headphones, Plus, CreditCard, CheckCircle2, X, ArrowUp, Sparkles, Check, Building2, Lock, Wallet, ShieldAlert
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
-import { doc, updateDoc, collection, addDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, collection, addDoc, getDocs, query, where, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { NIGERIAN_BANKS, predictBankFromNuban, resolveNubanAccount, BankInfo } from "../utils/nuban";
 import { notifyToast } from "../utils/toast";
 import OperationalRulesBanner, { getWATTimeDetails } from "./OperationalRulesBanner";
@@ -58,6 +58,38 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
   const [withdrawalSuccess, setWithdrawalSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showSupportModal, setShowSupportModal] = useState(false);
+
+  // Operational System Toggle State
+  const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(true);
+
+  // Subscribe to system rules in Firestore or local storage cache
+  useEffect(() => {
+    const cachedStr = localStorage.getItem("careem_invest_config_rules") || localStorage.getItem("cocacola_config_rules");
+    if (cachedStr) {
+      try {
+        const parsed = JSON.parse(cachedStr);
+        if (typeof parsed.withdrawalsEnabled === "boolean") setWithdrawalsEnabled(parsed.withdrawalsEnabled);
+      } catch (e) {}
+    }
+
+    let unsub: (() => void) | null = null;
+    try {
+      unsub = onSnapshot(doc(db, "system", "rules"), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (typeof data.withdrawalsEnabled === "boolean") setWithdrawalsEnabled(data.withdrawalsEnabled);
+        }
+      }, (err) => {
+        console.warn("Rules snapshot notice in WithdrawView:", err?.message || err);
+      });
+    } catch (e) {
+      console.warn("Error subscribing to system rules in WithdrawView:", e);
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
 
   // Check deposit requirement for withdrawals
   useEffect(() => {
@@ -168,6 +200,11 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
 
   const handleConfirmWithdrawal = async () => {
     setErrorMessage("");
+
+    if (!withdrawalsEnabled) {
+      setErrorMessage("Cash withdrawals are currently paused by system administration. Please check back later.");
+      return;
+    }
 
     // Enforce 9:00 AM - 4:00 PM WAT Withdrawal Time Window
     const timeInfo = getWATTime();
@@ -311,6 +348,19 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-5">
+
+        {/* Withdrawals Disabled System Banner */}
+        {!withdrawalsEnabled && (
+          <div className="bg-rose-50 rounded-3xl p-5 border border-rose-200 text-rose-900 space-y-2 shadow-xs">
+            <div className="flex items-center gap-2 text-rose-800 font-extrabold text-sm">
+              <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>Withdrawals Suspended</span>
+            </div>
+            <p className="text-xs text-rose-700 leading-relaxed font-medium">
+              Cash payout processing is temporarily paused by system administration. Please check back later.
+            </p>
+          </div>
+        )}
 
         {/* Deposit Requirement Warning Banner */}
         {!hasMadeDeposit && !checkingDepositStatus && (
@@ -494,9 +544,9 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
         <div className="max-w-md mx-auto space-y-1.5">
           <button
             onClick={handleConfirmWithdrawal}
-            disabled={!isFormValid || submittingWithdrawal}
+            disabled={!isFormValid || submittingWithdrawal || !withdrawalsEnabled}
             className={`w-full font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition shadow-xs cursor-pointer active:scale-98 ${
-              isFormValid && !submittingWithdrawal
+              isFormValid && !submittingWithdrawal && withdrawalsEnabled
                 ? "bg-[#c83a00] hover:bg-[#a32e00] text-white"
                 : "bg-slate-200 text-slate-400 cursor-not-allowed"
             }`}

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { db, auth } from "../lib/firebase";
+import CongratulationsModal, { InvestmentUpgradeSuccessDetails } from "./CongratulationsModal";
 import { 
   collection, 
   doc, 
@@ -53,6 +54,7 @@ export default function FundTab({ user, onUpdateUser }: FundTabProps) {
   const [selectedPlan, setSelectedPlan] = useState<FundPlan | null>(null);
   const [investAmount, setInvestAmount] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [congratsDetails, setCongratsDetails] = useState<InvestmentUpgradeSuccessDetails | null>(null);
 
   // Load fund plans and user's active fund investments
   useEffect(() => {
@@ -95,6 +97,8 @@ export default function FundTab({ user, onUpdateUser }: FundTabProps) {
         ];
         setFundPlans(defaults);
       }
+    }, (err) => {
+      console.warn("Funds config snapshot notice (using local defaults):", err?.message || err);
     });
 
     if (auth.currentUser) {
@@ -105,6 +109,8 @@ export default function FundTab({ user, onUpdateUser }: FundTabProps) {
           id: doc.id
         })) as UserFundInvestment[];
         setInvestments(data);
+      }, (err) => {
+        console.warn("User investments snapshot notice:", err?.message || err);
       });
       return () => {
         unsubPlans();
@@ -178,6 +184,13 @@ export default function FundTab({ user, onUpdateUser }: FundTabProps) {
       });
 
       setSuccessMsg(`Sponsorship Investment of ₦${amount.toLocaleString()} placed successfully in the ${selectedPlan.name}!`);
+      setCongratsDetails({
+        planName: selectedPlan.name,
+        amountInvested: amount,
+        dailyReward: amount * selectedPlan.dailyInterestRate,
+        durationDays: selectedPlan.durationDays,
+        tierId: selectedPlan.id
+      });
       setSelectedPlan(null);
       setInvestAmount("");
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -510,6 +523,13 @@ export default function FundTab({ user, onUpdateUser }: FundTabProps) {
           </form>
         </div>
       )}
+
+      {/* Congratulations Investment Upgrade Modal */}
+      <CongratulationsModal
+        isOpen={!!congratsDetails}
+        onClose={() => setCongratsDetails(null)}
+        details={congratsDetails}
+      />
 
     </div>
   );

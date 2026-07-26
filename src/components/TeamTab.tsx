@@ -196,7 +196,7 @@ export default function TeamTab({ user, onUpdateUser }: TeamTabProps) {
 
       setExpandedNodes(initialExpanded);
     } catch (err) {
-      console.error("Error fetching team tree:", err);
+      console.warn("Notice fetching team tree (Firestore quota or network limit):", err);
     } finally {
       setLoadingTree(false);
     }

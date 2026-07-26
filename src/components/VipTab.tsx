@@ -8,6 +8,7 @@ import { COCA_COLA_BRAND_ASSETS } from "../data/brandImages";
 import { db } from "../lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import InvestorPitchDeckModal from "./InvestorPitchDeckModal";
+import CongratulationsModal, { InvestmentUpgradeSuccessDetails } from "./CongratulationsModal";
 
 interface VipTabProps {
   user: UserProfile;
@@ -26,6 +27,7 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
   const [calcPlan, setCalcPlan] = useState<InvestmentTier>(INVESTMENT_TIERS[0]);
   const [calcQuantity, setCalcQuantity] = useState<number>(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [congratsDetails, setCongratsDetails] = useState<InvestmentUpgradeSuccessDetails | null>(null);
 
   // Filter logic
   let filteredPlans = [...INVESTMENT_TIERS];
@@ -98,6 +100,13 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
     }
 
     setSelectedPlan(null);
+    setCongratsDetails({
+      planName: plan.name,
+      amountInvested: plan.price,
+      dailyReward: plan.dailyReward,
+      durationDays: plan.durationDays || 60,
+      tierId: plan.id
+    });
     setToastMessage(`🎉 Investment successful! You purchased ${plan.name}. Daily profit drops automatically every 24 hours.`);
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -466,6 +475,20 @@ export default function VipTab({ user, onUpdateUser, onNavigateToTab, onNavigate
         onClose={() => setShowPitchDeckModal(false)}
         onNavigateToProducts={() => {
           setShowPitchDeckModal(false);
+        }}
+      />
+
+      {/* Congratulations Tier Upgrade Modal */}
+      <CongratulationsModal
+        isOpen={!!congratsDetails}
+        onClose={() => setCongratsDetails(null)}
+        details={congratsDetails}
+        onViewPortfolio={() => {
+          setCongratsDetails(null);
+          if (onNavigateToMineView) {
+            onNavigateToMineView("none");
+          }
+          onNavigateToTab("mine");
         }}
       />
 
