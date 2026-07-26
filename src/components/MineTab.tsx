@@ -110,6 +110,25 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
   // Firestore transaction logs state
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [txLoading, setTxLoading] = useState<boolean>(true);
+  const [userInvestments, setUserInvestments] = useState<any[]>([]);
+
+  useEffect(() => {
+    const targetUid = auth.currentUser?.uid || user.uid;
+    if (!targetUid) return;
+    
+    const investRef = collection(db, "users", targetUid, "investments");
+    const unsub = onSnapshot(investRef, (snap) => {
+      const list: any[] = [];
+      snap.docs.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setUserInvestments(list);
+    }, (err) => {
+      console.error("Error loading user investments:", err);
+    });
+
+    return () => unsub();
+  }, [user.uid]);
 
   useEffect(() => {
     const targetUid = auth.currentUser?.uid || user.uid;
@@ -1064,27 +1083,65 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
 
             {/* MY PRODUCTS / MY FUNDS VIEW */}
             {activeView === "my_funds" && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="flex items-center space-x-3 border-b border-gray-100 pb-3">
                   <Box className="w-6 h-6 text-[#D9381E]" />
-                  <h2 className="text-base font-bold text-gray-900 font-display">My Products & Assets</h2>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 font-display">My Products & Activated Assets</h2>
+                    <p className="text-xs text-slate-500">Your activated Coca-Cola beverage yield packages</p>
+                  </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-900">{currentTier.name}</span>
-                    <span className="text-xs font-extrabold text-emerald-600 font-mono">ACTIVE</span>
+                {userInvestments.length === 0 ? (
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-gray-900">{currentTier.name}</span>
+                      <span className="text-xs font-extrabold text-emerald-600 font-mono">ACTIVE</span>
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono">
+                      Investment Value: <strong className="text-gray-900">₦{currentTier.price.toLocaleString()}</strong>
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono">
+                      Daily Earnings: <strong className="text-emerald-600">₦{currentTier.dailyReward.toLocaleString()}</strong>
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono">
+                      Investment Cycle: <strong className="text-gray-900">100 Days</strong>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    Investment Value: <strong className="text-gray-900">₦{currentTier.price.toLocaleString()}</strong>
+                ) : (
+                  <div className="space-y-3">
+                    {userInvestments.map((inv) => (
+                      <div key={inv.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                          <span className="text-xs font-black text-slate-900">{inv.planName || currentTier.name}</span>
+                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full font-mono uppercase ${
+                            inv.status === "active" ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-gray-100 text-gray-600"
+                          }`}>
+                            {inv.status || "ACTIVE"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-600 pt-1">
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Package Value:</span>
+                            <strong className="text-slate-900">₦{Number(inv.amountInvested || currentTier.price).toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Daily Auto-Credit:</span>
+                            <strong className="text-emerald-600">₦{Number(inv.dailyReward || currentTier.dailyReward).toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Accumulated Yield:</span>
+                            <strong className="text-amber-600">₦{Number(inv.accumulatedProfit || 0).toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Cycle Remaining:</span>
+                            <strong className="text-slate-900">{inv.daysRemaining ?? 100} / 100 Days</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    Daily Earnings: <strong className="text-emerald-600">₦{currentTier.dailyReward.toLocaleString()}</strong>
-                  </div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    Investment Cycle: <strong className="text-gray-900">60 Days</strong>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 

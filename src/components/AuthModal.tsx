@@ -156,6 +156,15 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           };
         }
 
+        if (loggedInUser && loggedInUser.isBanned) {
+          setError(`ACCOUNT SUSPENDED: ${loggedInUser.bannedReason || "Your partner account has been suspended by administration due to policy violations."}`);
+          setLoading(false);
+          try {
+            await signOut(auth);
+          } catch (e) {}
+          return;
+        }
+
         localStorage.setItem("cocacola_invest_user", JSON.stringify(loggedInUser));
         onSuccess(loggedInUser);
 

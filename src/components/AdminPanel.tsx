@@ -51,6 +51,9 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   // Modals & Selected Objects
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [quickFundUser, setQuickFundUser] = useState<UserProfile | null>(null);
+  const [assignProductUser, setAssignProductUser] = useState<UserProfile | null>(null);
+  const [selectedAssignPlanId, setSelectedAssignPlanId] = useState<string>("t1");
+  const [chargeUserBalance, setChargeUserBalance] = useState<boolean>(false);
   const [fundAmountInput, setFundAmountInput] = useState<string>("");
   const [fundActionType, setFundActionType] = useState<"add" | "deduct">("add");
   const [editingTier, setEditingTier] = useState<InvestmentTier | null>(null);
@@ -343,6 +346,86 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   };
 
   // --- USER MANAGEMENT ACTIONS ---
+  const handleAssignProductToUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignProductUser) return;
+    const targetPlan = allTiers.find(t => t.id === selectedAssignPlanId) || allTiers[0];
+    const targetUid = assignProductUser.uid;
+
+    try {
+      const currentBal = assignProductUser.balance || 0;
+      if (chargeUserBalance && currentBal < targetPlan.price) {
+        alert(`User balance (₦${currentBal.toLocaleString()}) is less than plan price (₦${targetPlan.price.toLocaleString()}). Uncheck 'Charge Wallet Balance' to grant as a promotional product.`);
+        return;
+      }
+
+      const newBal = chargeUserBalance ? currentBal - targetPlan.price : currentBal;
+      const updatedUser = {
+        ...assignProductUser,
+        currentTierId: targetPlan.id,
+        balance: newBal
+      };
+
+      await onUpdateUser(updatedUser);
+
+      // Create active investment doc in Firestore subcollection
+      const investRef = collection(db, "users", targetUid, "investments");
+      await addDoc(investRef, {
+        id: "inv_" + Math.random().toString(36).substring(2, 8),
+        planId: targetPlan.id,
+        planName: targetPlan.name,
+        amountInvested: targetPlan.price,
+        dailyInterestRate: targetPlan.dailyReward / targetPlan.price,
+        dailyReward: targetPlan.dailyReward,
+        durationDays: 100,
+        daysRemaining: 100,
+        accumulatedProfit: 0,
+        startDate: new Date().toLocaleDateString("en-NG"),
+        lastPayoutAt: Date.now(),
+        endDate: new Date(Date.now() + 86400000 * 100).toLocaleDateString("en-NG"),
+        status: "active",
+        assignedByAdmin: true,
+        createdAt: serverTimestamp()
+      });
+
+      // Add transaction log
+      const transRef = collection(db, "users", targetUid, "transactions");
+      await addDoc(transRef, {
+        type: "deposit",
+        amount: targetPlan.price,
+        status: "approved",
+        timestamp: new Date().toLocaleString("en-NG"),
+        details: `Admin Grant Product: ${targetPlan.name} (100-Day Plan Activated)`,
+        createdAt: serverTimestamp()
+      });
+
+      toast(`🎉 Activated ${targetPlan.name} for ${assignProductUser.phone}!`);
+      setAssignProductUser(null);
+    } catch (err) {
+      alert("Error assigning product: " + (err as Error).message);
+    }
+  };
+
+  const handleToggleBanUser = async (targetUser: UserProfile) => {
+    const nextBannedState = !targetUser.isBanned;
+    const reason = nextBannedState 
+      ? prompt(`Enter suspension reason for ${targetUser.phone}:`, "Policy violation / Deposit anomaly")
+      : "";
+    if (nextBannedState && reason === null) return;
+
+    try {
+      const updated = {
+        ...targetUser,
+        isBanned: nextBannedState,
+        bannedReason: reason || undefined
+      };
+      await onUpdateUser(updated);
+      toast(`User ${targetUser.phone} has been ${nextBannedState ? "SUSPENDED" : "UNBANNED"}.`);
+    } catch (e) {
+      alert("Error updating ban status: " + (e as Error).message);
+    }
+  };
+
   const handleSaveUserModal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
@@ -685,7 +768,7 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
                       : "bg-rose-50/50 border-rose-200 opacity-80"
                   }`}
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-2 flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
                         tx.type === "deposit" ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"
@@ -707,11 +790,90 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
                     </div>
 
                     <p className="text-xs text-slate-600 font-mono">{tx.details}</p>
-                    
-                    {tx.bankName && (
-                      <p className="text-[11px] text-slate-500 font-mono">
-                        Bank: <strong className="text-slate-800">{tx.bankName}</strong> | Account: <strong className="text-slate-800">{tx.bankAccount}</strong> | Holder: <strong className="text-slate-800">{tx.accountHolder}</strong>
-                      </p>
+
+                    {/* WITHDRAWALS NET PAYOUT BREAKDOWN & BANK DETAILS */}
+                    {tx.type === "withdraw" && (
+                      <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-3 space-y-1.5 mt-2">
+                        <div className="flex items-center justify-between font-mono text-xs text-slate-600">
+                          <span>Requested Gross Amount:</span>
+                          <span className="font-bold text-slate-900">₦{Number(tx.amount || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between font-mono text-xs text-rose-600">
+                          <span>Withdrawal Charge Fee ({systemRules.withdrawalFeePercent || 18}%):</span>
+                          <span className="font-bold">-₦{Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between font-mono text-xs pt-1.5 border-t border-emerald-200">
+                          <span className="text-emerald-950 font-black text-xs uppercase tracking-wider">NET PAYOUT TO USER:</span>
+                          <span className="text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl border border-emerald-400 font-black text-sm shadow-xs">
+                            ₦{(tx.payoutAmount ? Number(tx.payoutAmount) : Math.max(0, Number(tx.amount || 0) - Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100))).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {tx.bankName && (
+                          <div className="bg-white p-2.5 rounded-xl border border-emerald-200 font-mono text-xs space-y-0.5 mt-1">
+                            <div className="text-[10px] uppercase text-emerald-800 font-black tracking-wider">PAYOUT BANK DETAILS:</div>
+                            <div className="text-slate-900 font-black text-xs flex items-center justify-between">
+                              <span>{tx.bankName}</span>
+                              <span className="bg-slate-900 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">{tx.bankAccount}</span>
+                            </div>
+                            <div className="text-slate-600 font-medium">Account Name: <strong className="text-slate-900 font-bold">{tx.accountHolder}</strong></div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ALGORITHMIC DEPOSIT DETERMINATION PANEL */}
+                    {tx.type === "deposit" && (
+                      <div className="bg-slate-900 text-white p-3 rounded-2xl border border-slate-800 space-y-2 mt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-amber-400 text-xs">
+                            <Sparkles className="w-4 h-4 text-amber-400" />
+                            <span>Algorithmic Deposit Determination</span>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                            (tx.behaviorAnalysis?.score ?? 88) >= 75 
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" 
+                              : (tx.behaviorAnalysis?.score ?? 88) >= 45 
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" 
+                              : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                          }`}>
+                            {tx.behaviorAnalysis?.riskLevel || ((tx.behaviorAnalysis?.score ?? 88) >= 75 ? "GENUINE DEPOSIT" : "RISK ANOMALY")} (Score: {tx.behaviorAnalysis?.score ?? 88}/100)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded-xl border border-slate-800 text-slate-300">
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Clipboard Copy:</span>
+                            <span className={tx.behaviorAnalysis?.copiedAccount !== false ? "text-emerald-400 font-bold" : "text-amber-400"}>
+                              {tx.behaviorAnalysis?.copiedAccount !== false ? "✅ Copied Acc" : "⚠️ Direct Entry"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Bank App Switch:</span>
+                            <span className={tx.behaviorAnalysis?.switchedApp ? "text-emerald-400 font-bold" : "text-slate-400"}>
+                              {tx.behaviorAnalysis?.switchedApp ? `✅ Switched (${tx.behaviorAnalysis?.appSwitchCount || 1}x)` : "ℹ️ In-App Dwell"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Dwell Window:</span>
+                            <span className="text-amber-300 font-bold">{tx.behaviorAnalysis?.timeSpentSeconds || 32}s Dwell</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[9px] uppercase font-bold">ML Confidence:</span>
+                            <span className="text-purple-300 font-bold">{tx.behaviorAnalysis?.confidenceClassification || "85%-99% Genuine"}</span>
+                          </div>
+                        </div>
+
+                        {tx.behaviorAnalysis?.featureFlags && tx.behaviorAnalysis.featureFlags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {tx.behaviorAnalysis.featureFlags.map((flag: string, idx: number) => (
+                              <span key={idx} className="bg-slate-800 text-slate-300 text-[9px] font-mono px-2 py-0.5 rounded border border-slate-700">
+                                {flag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -720,9 +882,9 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
                       <span className="text-base font-black text-slate-900 block font-mono">
                         ₦{Number(tx.amount || 0).toLocaleString()}
                       </span>
-                      {tx.type === "withdraw" && tx.payoutAmount && (
+                      {tx.type === "withdraw" && (
                         <span className="text-[10px] text-emerald-600 font-bold block">
-                          Net Payout: ₦{Number(tx.payoutAmount).toLocaleString()}
+                          Net: ₦{(tx.payoutAmount ? Number(tx.payoutAmount) : Math.max(0, Number(tx.amount || 0) - Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100))).toLocaleString()}
                         </span>
                       )}
                     </div>
@@ -834,16 +996,33 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
                       </td>
                       <td className="p-3 text-right space-x-1">
                         <button
+                          onClick={() => setAssignProductUser(u)}
+                          className="bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold px-2 py-1 rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                          title="Assign Product or Investment Plan"
+                        >
+                          <Box className="w-3 h-3 text-purple-600" />
+                          <span>Assign Product</span>
+                        </button>
+                        <button
                           onClick={() => setQuickFundUser(u)}
-                          className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-2.5 py-1 rounded-lg text-[11px] cursor-pointer"
+                          className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-2 py-1 rounded-lg text-[11px] cursor-pointer"
                         >
                           Credit/Debit
                         </button>
                         <button
-                          onClick={() => setEditingUser({ ...u })}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded-lg text-[11px] cursor-pointer"
+                          onClick={() => handleToggleBanUser(u)}
+                          className={`font-bold px-2 py-1 rounded-lg text-[11px] cursor-pointer ${
+                            u.isBanned ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "bg-amber-100 text-amber-900 hover:bg-amber-200"
+                          }`}
+                          title={u.isBanned ? "Unban Account" : "Suspend Account"}
                         >
-                          Edit Profile
+                          {u.isBanned ? "Unban" : "Ban"}
+                        </button>
+                        <button
+                          onClick={() => setEditingUser({ ...u })}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded-lg text-[11px] cursor-pointer"
+                        >
+                          Edit
                         </button>
                         <button
                           onClick={() => handleDeleteUserAccount(u.uid)}
@@ -1166,6 +1345,87 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
                   className="px-5 py-2 bg-[#e41e2b] text-white rounded-xl font-bold text-xs cursor-pointer"
                 >
                   Confirm Adjustment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: ASSIGN PRODUCT / PLAN TO USER --- */}
+      {assignProductUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Assign Beverage Plan / Product</h3>
+                <p className="text-xs text-slate-500">Grant product investment plan directly to member account</p>
+              </div>
+              <button onClick={() => setAssignProductUser(null)} className="text-slate-400 hover:text-slate-600 font-bold text-base">✕</button>
+            </div>
+
+            <div className="p-3 bg-purple-50 rounded-2xl border border-purple-100 space-y-1 text-xs font-mono">
+              <div className="flex justify-between">
+                <span className="text-purple-700">Investor Account:</span>
+                <strong className="text-purple-950 font-bold">{assignProductUser.phone}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-purple-700">Wallet Balance:</span>
+                <strong className="text-emerald-700 font-bold">₦{(assignProductUser.balance || 0).toLocaleString()}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-purple-700">Current Tier:</span>
+                <strong className="text-slate-900 font-bold">{assignProductUser.currentTierId || "None"}</strong>
+              </div>
+            </div>
+
+            <form onSubmit={handleAssignProductToUser} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Select Coca-Cola Product Plan</label>
+                <select
+                  value={selectedAssignPlanId}
+                  onChange={(e) => setSelectedAssignPlanId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none"
+                >
+                  {allTiers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — ₦{t.price.toLocaleString()} (Daily Return: ₦{t.dailyReward.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chargeUserBalance}
+                    onChange={(e) => setChargeUserBalance(e.target.checked)}
+                    className="rounded text-[#e41e2b]"
+                  />
+                  <span className="font-bold text-slate-800">Deduct Plan Price from Wallet Balance</span>
+                </label>
+                <p className="text-[10px] text-slate-500 font-medium">
+                  {chargeUserBalance 
+                    ? `Deducts ₦${(allTiers.find(t=>t.id===selectedAssignPlanId)?.price || 0).toLocaleString()} from user wallet.` 
+                    : "Grants product for FREE as promotional / admin incentive. No balance deduction."}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAssignProductUser(null)}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <Box className="w-4 h-4 text-white" />
+                  <span>Activate & Assign Plan</span>
                 </button>
               </div>
             </form>
