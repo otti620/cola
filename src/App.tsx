@@ -24,6 +24,7 @@ import ToastContainer, { ToastItem } from "./components/ToastContainer";
 import { notifyToast } from "./utils/toast";
 
 import TelegramFlyerModal from "./components/TelegramFlyerModal";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -418,78 +419,92 @@ export default function App() {
       <main className="flex-1 w-full mx-auto py-2 px-1 sm:px-3 relative z-10 max-w-2xl min-h-[calc(100vh-60px)]">
         
         {activeTab === "home" && (
-          <HomeTab 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-            onNavigateToTab={(tab) => {
-              setMineActiveView("none");
-              setActiveTab(tab);
-            }}
-            onNavigateToMineView={(view) => {
-              setMineActiveView(view);
-              setActiveTab("mine");
-            }}
-          />
+          <ErrorBoundary fallbackTitle="Home Screen Notice">
+            <HomeTab 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+              onNavigateToTab={(tab) => {
+                setMineActiveView("none");
+                setActiveTab(tab);
+              }}
+              onNavigateToMineView={(view) => {
+                setMineActiveView(view);
+                setActiveTab("mine");
+              }}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "task" && (
-          <TaskTab 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-            onNavigateToTab={(tab) => {
-              setMineActiveView("none");
-              setActiveTab(tab);
-            }}
-          />
+          <ErrorBoundary fallbackTitle="Task Screen Notice">
+            <TaskTab 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+              onNavigateToTab={(tab) => {
+                setMineActiveView("none");
+                setActiveTab(tab);
+              }}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "vip" && (
-          <VipTab 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-            onNavigateToTab={(tab) => {
-              setMineActiveView("none");
-              setActiveTab(tab);
-            }}
-            onNavigateToMineView={(view) => {
-              setMineActiveView(view);
-              setActiveTab("mine");
-            }}
-          />
+          <ErrorBoundary fallbackTitle="VIP Screen Notice">
+            <VipTab 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+              onNavigateToTab={(tab) => {
+                setMineActiveView("none");
+                setActiveTab(tab);
+              }}
+              onNavigateToMineView={(view) => {
+                setMineActiveView(view);
+                setActiveTab("mine");
+              }}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "fund" && (
-          <FundTab 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-          />
+          <ErrorBoundary fallbackTitle="Fund Screen Notice">
+            <FundTab 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "team" && (
-          <TeamTab 
-            user={user}
-            onUpdateUser={handleUpdateUser}
-          />
+          <ErrorBoundary fallbackTitle="Team Screen Notice">
+            <TeamTab 
+              user={user}
+              onUpdateUser={handleUpdateUser}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "mine" && (
-          <MineTab 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-            onLogout={handleLogout}
-            activeView={mineActiveView}
-            setActiveView={setMineActiveView}
-          />
+          <ErrorBoundary fallbackTitle="Profile Screen Notice">
+            <MineTab 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+              onLogout={handleLogout}
+              activeView={mineActiveView}
+              setActiveView={setMineActiveView}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === "admin" && isUserAdmin(user.phone) && (
-          <AdminPanel 
-            user={user} 
-            onUpdateUser={handleUpdateUser}
-            onNavigateToTab={(tab) => {
-            setActiveTab(tab);
-          }}
-          />
+          <ErrorBoundary fallbackTitle="Admin Panel Notice">
+            <AdminPanel 
+              user={user} 
+              onUpdateUser={handleUpdateUser}
+              onNavigateToTab={(tab) => {
+                setActiveTab(tab);
+              }}
+            />
+          </ErrorBoundary>
         )}
 
       </main>

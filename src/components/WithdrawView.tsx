@@ -247,9 +247,15 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           amount: amt,
           fee: feeAmount,
           netPayout,
+          payoutAmount: netPayout,
           status: "pending",
           timestamp: new Date().toLocaleString("en-NG"),
-          details: `Withdrawal to ${user.bankName} (${user.bankAccount})`,
+          details: `Withdrawal to ${user.bankName || "Bank"} (${user.bankAccount || ""})`,
+          bankName: user.bankName || "",
+          bankAccount: user.bankAccount || "",
+          accountHolder: user.fullName || "",
+          userPhone: user.phone || "",
+          userFullName: user.fullName || "",
           createdAt: serverTimestamp()
         });
 
@@ -392,6 +398,26 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
               );
             })}
           </div>
+
+          {/* Live 18% Fee Calculation & Expected Net Payout */}
+          {parsedAmt && !isNaN(parsedAmt) && parsedAmt >= 1500 ? (
+            <div className="bg-[#fff8f5] border border-[#ffcca8] rounded-2xl p-3.5 space-y-2 font-mono text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Requested Amount:</span>
+                <span className="font-bold text-slate-900">₦{parsedAmt.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-rose-600">
+                <span>Processing Fee (18%):</span>
+                <span className="font-bold">-₦{Math.round(parsedAmt * 0.18).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-emerald-800 font-bold border-t border-[#ffe0cc] pt-2 text-xs sm:text-sm">
+                <span>Expected Net Payout:</span>
+                <span className="bg-emerald-100 text-emerald-950 px-3 py-1 rounded-xl border border-emerald-300 text-sm font-black shadow-xs">
+                  ₦{Math.round(parsedAmt * 0.82).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ) : null}
 
           {errorMessage && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-xs text-center font-bold">

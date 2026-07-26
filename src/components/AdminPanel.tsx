@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Award, ClipboardList, PiggyBank, Settings, Database, 
   Save, RefreshCw, Plus, Trash2, Check, AlertCircle, TrendingUp,
-  ShieldCheck, CreditCard, Lock, ArrowDownCircle, ArrowUpCircle, Sparkles, Bell, Key, Search, Eye, Edit, DollarSign, Filter, CheckCircle2, XCircle, UserCheck, ShieldAlert, Sparkle
+  ShieldCheck, CreditCard, Lock, ArrowDownCircle, ArrowUpCircle, Sparkles, Bell, Key, Search, Eye, Edit, DollarSign, Filter, CheckCircle2, XCircle, UserCheck, ShieldAlert, Sparkle, Box, Package, Zap, Copy
 } from "lucide-react";
 import { UserProfile, InvestmentTier, CareemTask } from "../types";
 import { INVESTMENT_TIERS } from "../data";
@@ -21,12 +21,24 @@ interface AdminPanelProps {
 
 export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: AdminPanelProps) {
   // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<"approvals" | "users" | "tiers" | "rules" | "telemetry">("approvals");
+  const [activeTab, setActiveTab] = useState<"approvals" | "users" | "products" | "tiers" | "rules" | "telemetry">("approvals");
 
   // State Management
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allTiers, setAllTiers] = useState<InvestmentTier[]>([]);
   const [pendingTxs, setPendingTxs] = useState<any[]>([]);
+
+  // Product Management tab state
+  const [pmTargetUserUid, setPmTargetUserUid] = useState<string>("");
+  const [pmSelectedPlanId, setPmSelectedPlanId] = useState<string>("t1");
+  const [pmIsCustomProduct, setPmIsCustomProduct] = useState<boolean>(false);
+  const [pmCustomProductId, setPmCustomProductId] = useState<string>("");
+  const [pmCustomProductName, setPmCustomProductName] = useState<string>("");
+  const [pmCustomPrice, setPmCustomPrice] = useState<number>(10000);
+  const [pmCustomDailyReward, setPmCustomDailyReward] = useState<number>(3500);
+  const [pmCustomCycleDays, setPmCustomCycleDays] = useState<number>(100);
+  const [pmChargeBalance, setPmChargeBalance] = useState<boolean>(false);
+  const [pmSearchQuery, setPmSearchQuery] = useState<string>("");
   const [systemRules, setSystemRules] = useState({
     minWithdrawal: 1500,
     withdrawalFeePercent: 18,
@@ -47,6 +59,19 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   const [userFilter, setUserFilter] = useState<"all" | "new" | "promoters" | "banned">("all");
   const [approvalFilter, setApprovalFilter] = useState<"all" | "deposit" | "withdraw">("all");
   const [approvalStatusFilter, setApprovalStatusFilter] = useState<"pending" | "approved" | "declined" | "all">("pending");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, label: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(`${label}-${text}`);
+    setTimeout(() => setCopiedKey(null), 2000);
+    notifyToast({
+      title: "📋 Copied to Clipboard",
+      message: `${label}: ${text}`,
+      type: "success"
+    });
+  };
 
   // Modals & Selected Objects
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -406,6 +431,96 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
     }
   };
 
+  const handlePmAssignProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pmTargetUserUid) {
+      alert("Please select a target investor user first.");
+      return;
+    }
+
+    const targetUser = allUsers.find(u => u.uid === pmTargetUserUid);
+    if (!targetUser) {
+      alert("Selected user profile not found.");
+      return;
+    }
+
+    let planId = pmSelectedPlanId;
+    let planName = "";
+    let planPrice = 0;
+    let planDailyReward = 0;
+    let cycleDays = pmCustomCycleDays || 100;
+
+    if (pmIsCustomProduct) {
+      if (!pmCustomProductId || !pmCustomProductName) {
+        alert("Please specify custom Product ID and Product Name.");
+        return;
+      }
+      planId = pmCustomProductId.trim();
+      planName = pmCustomProductName.trim();
+      planPrice = Number(pmCustomPrice) || 0;
+      planDailyReward = Number(pmCustomDailyReward) || 0;
+    } else {
+      const matched = allTiers.find(t => t.id === pmSelectedPlanId) || allTiers[0];
+      planId = matched.id;
+      planName = matched.name;
+      planPrice = matched.price;
+      planDailyReward = matched.dailyReward;
+    }
+
+    const currentBal = targetUser.balance || 0;
+    if (pmChargeBalance && currentBal < planPrice) {
+      alert(`User balance (₦${currentBal.toLocaleString()}) is less than plan price (₦${planPrice.toLocaleString()}). Uncheck 'Charge Investor Balance' to assign as a promotional product.`);
+      return;
+    }
+
+    try {
+      const newBal = pmChargeBalance ? currentBal - planPrice : currentBal;
+      const updatedUser = {
+        ...targetUser,
+        currentTierId: planId,
+        balance: newBal
+      };
+
+      await onUpdateUser(updatedUser);
+
+      // Create active investment doc in Firestore subcollection
+      const investRef = collection(db, "users", targetUser.uid, "investments");
+      await addDoc(investRef, {
+        id: "inv_" + Math.random().toString(36).substring(2, 8),
+        planId: planId,
+        planName: planName,
+        amountInvested: planPrice,
+        dailyInterestRate: planPrice > 0 ? planDailyReward / planPrice : 0.35,
+        dailyReward: planDailyReward,
+        durationDays: cycleDays,
+        daysRemaining: cycleDays,
+        accumulatedProfit: 0,
+        startDate: new Date().toLocaleDateString("en-NG"),
+        lastPayoutAt: Date.now(),
+        endDate: new Date(Date.now() + 86400000 * cycleDays).toLocaleDateString("en-NG"),
+        status: "active",
+        assignedByAdmin: true,
+        createdAt: serverTimestamp()
+      });
+
+      // Add transaction log
+      const transRef = collection(db, "users", targetUser.uid, "transactions");
+      await addDoc(transRef, {
+        type: "deposit",
+        amount: planPrice,
+        status: "approved",
+        timestamp: new Date().toLocaleString("en-NG"),
+        details: `Admin Assigned Product: ${planName} (${cycleDays}-Day Plan Activated)`,
+        createdAt: serverTimestamp()
+      });
+
+      toast(`🎉 Assigned ${planName} to ${targetUser.phone} with immediate effect!`);
+      setAllUsers(prev => prev.map(u => u.uid === targetUser.uid ? updatedUser : u));
+    } catch (err) {
+      alert("Error assigning product: " + (err as Error).message);
+    }
+  };
+
   const handleToggleBanUser = async (targetUser: UserProfile) => {
     const nextBannedState = !targetUser.isBanned;
     const reason = nextBannedState 
@@ -531,30 +646,32 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   };
 
   // Filtered lists
-  const filteredUsersList = allUsers.filter(u => {
+  const filteredUsersList = (allUsers || []).filter(u => {
+    if (!u) return false;
     if (userFilter === "promoters" && !u.isPromoter) return false;
     if (userFilter === "banned" && !u.isBanned) return false;
 
-    const q = userSearch.toLowerCase().trim();
+    const q = (userSearch || "").toLowerCase().trim();
     if (!q) return true;
     return (
-      (u.phone || "").toLowerCase().includes(q) ||
-      (u.fullName || "").toLowerCase().includes(q) ||
-      (u.email || "").toLowerCase().includes(q) ||
-      (u.referralCode || "").toLowerCase().includes(q)
+      String(u.phone || "").toLowerCase().includes(q) ||
+      String(u.fullName || "").toLowerCase().includes(q) ||
+      String(u.email || "").toLowerCase().includes(q) ||
+      String(u.referralCode || "").toLowerCase().includes(q)
     );
   });
 
-  const filteredApprovalsList = pendingTxs.filter(tx => {
+  const filteredApprovalsList = (pendingTxs || []).filter(tx => {
+    if (!tx) return false;
     if (approvalFilter !== "all" && tx.type !== approvalFilter) return false;
     if (approvalStatusFilter !== "all" && tx.status !== approvalStatusFilter) return false;
     return true;
   });
 
   // Calculate totals for KPIs
-  const totalUserBalances = allUsers.reduce((acc, u) => acc + (u.balance || 0), 0);
-  const pendingDepositsCount = pendingTxs.filter(t => t.status === "pending" && t.type === "deposit").length;
-  const pendingWithdrawalsCount = pendingTxs.filter(t => t.status === "pending" && t.type === "withdraw").length;
+  const totalUserBalances = (allUsers || []).reduce((acc, u) => acc + (u?.balance || 0), 0);
+  const pendingDepositsCount = (pendingTxs || []).filter(t => t && t.status === "pending" && t.type === "deposit").length;
+  const pendingWithdrawalsCount = (pendingTxs || []).filter(t => t && t.status === "pending" && t.type === "withdraw").length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20 px-3 sm:px-6 font-sans">
@@ -692,6 +809,18 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
         </button>
 
         <button
+          onClick={() => setActiveTab("products")}
+          className={`px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2 transition cursor-pointer border ${
+            activeTab === "products"
+              ? "bg-[#e41e2b] text-white border-[#e41e2b] shadow-sm"
+              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <Box className="w-4 h-4" />
+          <span>Product Management</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("tiers")}
           className={`px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2 transition cursor-pointer border ${
             activeTab === "tiers"
@@ -757,159 +886,215 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredApprovalsList.map((tx) => (
-                <div
-                  key={tx.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                    tx.status === "pending"
-                      ? "bg-amber-50/50 border-amber-200"
-                      : tx.status === "approved"
-                      ? "bg-slate-50 border-slate-200 opacity-80"
-                      : "bg-rose-50/50 border-rose-200 opacity-80"
-                  }`}
-                >
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                        tx.type === "deposit" ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"
-                      }`}>
-                        {tx.type}
-                      </span>
-                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                        tx.status === "pending" ? "bg-amber-200 text-amber-900" :
-                        tx.status === "approved" ? "bg-emerald-200 text-emerald-900" : "bg-rose-200 text-rose-900"
-                      }`}>
-                        {tx.status}
-                      </span>
-                      <span className="text-xs font-mono text-slate-400">{tx.timestamp || "Recent"}</span>
-                    </div>
+              {filteredApprovalsList.map((tx) => {
+                const isWithdrawal = tx.type === "withdraw" || tx.type === "withdrawal";
+                const userDoc = (allUsers || []).find(u => u && (u.uid === tx.userId || u.phone === tx.userPhone));
+                const bName = tx.bankName || userDoc?.bankName || (tx.details?.match(/to ([^(]+)/)?.[1]?.trim()) || "Bank Account";
+                const bAcc = tx.bankAccount || userDoc?.bankAccount || (tx.details?.match(/\((\d+)\)/)?.[1]) || "";
+                const bHolder = tx.accountHolder || userDoc?.fullName || tx.userFullName || "Account Holder";
 
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-black text-slate-900">{tx.userPhone}</h4>
-                      <span className="text-xs text-slate-500">({tx.userFullName})</span>
-                    </div>
+                const grossAmt = Number(tx.amount || 0);
+                const feePct = systemRules.withdrawalFeePercent || 18;
+                const feeVal = tx.fee ? Number(tx.fee) : Math.round((grossAmt * feePct) / 100);
+                const netPayoutVal = tx.payoutAmount ? Number(tx.payoutAmount) : (tx.netPayout ? Number(tx.netPayout) : Math.max(0, grossAmt - feeVal));
 
-                    <p className="text-xs text-slate-600 font-mono">{tx.details}</p>
-
-                    {/* WITHDRAWALS NET PAYOUT BREAKDOWN & BANK DETAILS */}
-                    {tx.type === "withdraw" && (
-                      <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-3 space-y-1.5 mt-2">
-                        <div className="flex items-center justify-between font-mono text-xs text-slate-600">
-                          <span>Requested Gross Amount:</span>
-                          <span className="font-bold text-slate-900">₦{Number(tx.amount || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center justify-between font-mono text-xs text-rose-600">
-                          <span>Withdrawal Charge Fee ({systemRules.withdrawalFeePercent || 18}%):</span>
-                          <span className="font-bold">-₦{Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center justify-between font-mono text-xs pt-1.5 border-t border-emerald-200">
-                          <span className="text-emerald-950 font-black text-xs uppercase tracking-wider">NET PAYOUT TO USER:</span>
-                          <span className="text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl border border-emerald-400 font-black text-sm shadow-xs">
-                            ₦{(tx.payoutAmount ? Number(tx.payoutAmount) : Math.max(0, Number(tx.amount || 0) - Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100))).toLocaleString()}
-                          </span>
-                        </div>
-
-                        {tx.bankName && (
-                          <div className="bg-white p-2.5 rounded-xl border border-emerald-200 font-mono text-xs space-y-0.5 mt-1">
-                            <div className="text-[10px] uppercase text-emerald-800 font-black tracking-wider">PAYOUT BANK DETAILS:</div>
-                            <div className="text-slate-900 font-black text-xs flex items-center justify-between">
-                              <span>{tx.bankName}</span>
-                              <span className="bg-slate-900 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">{tx.bankAccount}</span>
-                            </div>
-                            <div className="text-slate-600 font-medium">Account Name: <strong className="text-slate-900 font-bold">{tx.accountHolder}</strong></div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ALGORITHMIC DEPOSIT DETERMINATION PANEL */}
-                    {tx.type === "deposit" && (
-                      <div className="bg-slate-900 text-white p-3 rounded-2xl border border-slate-800 space-y-2 mt-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 font-bold text-amber-400 text-xs">
-                            <Sparkles className="w-4 h-4 text-amber-400" />
-                            <span>Algorithmic Deposit Determination</span>
-                          </div>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
-                            (tx.behaviorAnalysis?.score ?? 88) >= 75 
-                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" 
-                              : (tx.behaviorAnalysis?.score ?? 88) >= 45 
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" 
-                              : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                          }`}>
-                            {tx.behaviorAnalysis?.riskLevel || ((tx.behaviorAnalysis?.score ?? 88) >= 75 ? "GENUINE DEPOSIT" : "RISK ANOMALY")} (Score: {tx.behaviorAnalysis?.score ?? 88}/100)
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded-xl border border-slate-800 text-slate-300">
-                          <div>
-                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Clipboard Copy:</span>
-                            <span className={tx.behaviorAnalysis?.copiedAccount !== false ? "text-emerald-400 font-bold" : "text-amber-400"}>
-                              {tx.behaviorAnalysis?.copiedAccount !== false ? "✅ Copied Acc" : "⚠️ Direct Entry"}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Bank App Switch:</span>
-                            <span className={tx.behaviorAnalysis?.switchedApp ? "text-emerald-400 font-bold" : "text-slate-400"}>
-                              {tx.behaviorAnalysis?.switchedApp ? `✅ Switched (${tx.behaviorAnalysis?.appSwitchCount || 1}x)` : "ℹ️ In-App Dwell"}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block text-[9px] uppercase font-bold">Dwell Window:</span>
-                            <span className="text-amber-300 font-bold">{tx.behaviorAnalysis?.timeSpentSeconds || 32}s Dwell</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block text-[9px] uppercase font-bold">ML Confidence:</span>
-                            <span className="text-purple-300 font-bold">{tx.behaviorAnalysis?.confidenceClassification || "85%-99% Genuine"}</span>
-                          </div>
-                        </div>
-
-                        {tx.behaviorAnalysis?.featureFlags && tx.behaviorAnalysis.featureFlags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-0.5">
-                            {tx.behaviorAnalysis.featureFlags.map((flag: string, idx: number) => (
-                              <span key={idx} className="bg-slate-800 text-slate-300 text-[9px] font-mono px-2 py-0.5 rounded border border-slate-700">
-                                {flag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3 sm:text-right shrink-0">
-                    <div>
-                      <span className="text-base font-black text-slate-900 block font-mono">
-                        ₦{Number(tx.amount || 0).toLocaleString()}
-                      </span>
-                      {tx.type === "withdraw" && (
-                        <span className="text-[10px] text-emerald-600 font-bold block">
-                          Net: ₦{(tx.payoutAmount ? Number(tx.payoutAmount) : Math.max(0, Number(tx.amount || 0) - Math.round((Number(tx.amount || 0) * (systemRules.withdrawalFeePercent || 18)) / 100))).toLocaleString()}
+                return (
+                  <div
+                    key={tx.id}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                      tx.status === "pending"
+                        ? "bg-amber-50/50 border-amber-200"
+                        : tx.status === "approved"
+                        ? "bg-slate-50 border-slate-200 opacity-80"
+                        : "bg-rose-50/50 border-rose-200 opacity-80"
+                    }`}
+                  >
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                          tx.type === "deposit" ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"
+                        }`}>
+                          {tx.type}
                         </span>
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                          tx.status === "pending" ? "bg-amber-200 text-amber-900" :
+                          tx.status === "approved" ? "bg-emerald-200 text-emerald-900" : "bg-rose-200 text-rose-900"
+                        }`}>
+                          {tx.status}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">{tx.timestamp || "Recent"}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-black text-slate-900">{tx.userPhone}</h4>
+                        <span className="text-xs text-slate-500">({tx.userFullName})</span>
+                      </div>
+
+                      <p className="text-xs text-slate-600 font-mono">{tx.details}</p>
+
+                      {/* WITHDRAWALS NET PAYOUT BREAKDOWN & BANK DETAILS WITH COPY BUTTONS */}
+                      {isWithdrawal && (
+                        <div className="bg-emerald-50/90 border-2 border-emerald-300 rounded-2xl p-3.5 space-y-2 mt-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3 rounded-xl border border-emerald-200">
+                            <div>
+                              <span className="text-[10px] uppercase font-black text-emerald-900 tracking-wider block">EXACT NET PAYOUT TO TRANSFER:</span>
+                              <span className="text-xl font-black text-emerald-800 font-mono">
+                                ₦{netPayoutVal.toLocaleString()}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-mono block">
+                                (Gross Requested: ₦{grossAmt.toLocaleString()} — 18% Fee Charged: -₦{feeVal.toLocaleString()})
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(String(netPayoutVal), "Net Payout Amount")}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs shrink-0"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>{copiedKey === `Net Payout Amount-${netPayoutVal}` ? "Copied Net!" : "Copy Net Amount"}</span>
+                            </button>
+                          </div>
+
+                          {/* Bank Account Details Card with Copy Buttons */}
+                          <div className="bg-white p-3 rounded-xl border border-emerald-200 space-y-2">
+                            <div className="flex items-center justify-between text-[11px] font-black uppercase text-slate-800 tracking-wider">
+                              <span>Payout Destination Bank:</span>
+                              <span className="text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">{bName}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Account Number:</span>
+                                <span className="text-base font-black font-mono text-slate-900">{bAcc || "Not Specified"}</span>
+                              </div>
+                              {bAcc ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyText(bAcc, "Account Number")}
+                                  className="bg-slate-900 hover:bg-slate-800 text-amber-300 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-xs shrink-0"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>{copiedKey === `Account Number-${bAcc}` ? "Copied Acc!" : "Copy Account Number"}</span>
+                                </button>
+                              ) : null}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Account Holder Name:</span>
+                                <span className="text-xs font-bold text-slate-900">{bHolder}</span>
+                              </div>
+                              {bHolder ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyText(bHolder, "Account Holder Name")}
+                                  className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer shrink-0"
+                                >
+                                  <Copy className="w-3 h-3 text-slate-600" />
+                                  <span>{copiedKey === `Account Holder Name-${bHolder}` ? "Copied Name!" : "Copy Name"}</span>
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ALGORITHMIC DEPOSIT DETERMINATION PANEL */}
+                      {tx.type === "deposit" && (
+                        <div className="bg-slate-900 text-white p-3 rounded-2xl border border-slate-800 space-y-2 mt-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-bold text-amber-400 text-xs">
+                              <Sparkles className="w-4 h-4 text-amber-400" />
+                              <span>Algorithmic Deposit Determination</span>
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                              (tx.behaviorAnalysis?.score ?? 88) >= 75 
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" 
+                                : (tx.behaviorAnalysis?.score ?? 88) >= 45 
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" 
+                                : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                            }`}>
+                              {tx.behaviorAnalysis?.riskLevel || ((tx.behaviorAnalysis?.score ?? 88) >= 75 ? "GENUINE DEPOSIT" : "RISK ANOMALY")} (Score: {tx.behaviorAnalysis?.score ?? 88}/100)
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded-xl border border-slate-800 text-slate-300">
+                            <div>
+                              <span className="text-slate-500 block text-[9px] uppercase font-bold">Clipboard Copy:</span>
+                              <span className={tx.behaviorAnalysis?.copiedAccount !== false ? "text-emerald-400 font-bold" : "text-amber-400"}>
+                                {tx.behaviorAnalysis?.copiedAccount !== false ? "✅ Copied Acc" : "⚠️ Direct Entry"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[9px] uppercase font-bold">Bank App Switch:</span>
+                              <span className={tx.behaviorAnalysis?.switchedApp ? "text-emerald-400 font-bold" : "text-slate-400"}>
+                                {tx.behaviorAnalysis?.switchedApp ? `✅ Switched (${tx.behaviorAnalysis?.appSwitchCount || 1}x)` : "ℹ️ In-App Dwell"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[9px] uppercase font-bold">Dwell Window:</span>
+                              <span className="text-amber-300 font-bold">{tx.behaviorAnalysis?.timeSpentSeconds || 32}s Dwell</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-[9px] uppercase font-bold">ML Confidence:</span>
+                              <span className="text-purple-300 font-bold">{tx.behaviorAnalysis?.confidenceClassification || "85%-99% Genuine"}</span>
+                            </div>
+                          </div>
+
+                          {tx.behaviorAnalysis?.featureFlags && tx.behaviorAnalysis.featureFlags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {tx.behaviorAnalysis.featureFlags.map((flag: string, idx: number) => (
+                                <span key={idx} className="bg-slate-800 text-slate-300 text-[9px] font-mono px-2 py-0.5 rounded border border-slate-700">
+                                  {flag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
-                    {tx.status === "pending" && (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleApproveTransaction(tx)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeclineTransaction(tx)}
-                          className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Decline</span>
-                        </button>
+                    <div className="flex items-center gap-3 sm:text-right shrink-0">
+                      <div>
+                        {isWithdrawal ? (
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-emerald-600 block uppercase tracking-wider">NET PAYOUT ONLY</span>
+                            <span className="text-base font-black text-emerald-800 block font-mono bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-300">
+                              ₦{netPayoutVal.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-mono">
+                              Gross: ₦{grossAmt.toLocaleString()} (-18%)
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-base font-black text-slate-900 block font-mono">
+                            ₦{grossAmt.toLocaleString()}
+                          </span>
+                        )}
                       </div>
-                    )}
+
+                      {tx.status === "pending" && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleApproveTransaction(tx)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeclineTransaction(tx)}
+                            className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Decline</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1187,6 +1372,342 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
               <span>Save System Rules</span>
             </button>
           </form>
+        </div>
+      )}
+
+      {/* --- TAB: PRODUCT MANAGEMENT --- */}
+      {activeTab === "products" && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Card 1: Product & Investment Plan Assignment Console */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-purple-100 text-purple-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full font-mono">
+                    Executive Control
+                  </span>
+                  <span className="text-emerald-600 text-xs font-mono font-bold flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5" /> Immediate Account Effect
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900 font-display mt-1">Product Management & Manual Plan Assignment</h3>
+                <p className="text-xs text-slate-500">
+                  Manually assign any Coca-Cola investment tier or custom product ID to any registered user with immediate effect on their account.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePmAssignProduct} className="space-y-5">
+              {/* Step 1: Select Target User */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    <span>1. Select Investor Account</span>
+                  </label>
+                  <span className="text-[11px] font-mono font-bold text-slate-500">
+                    {allUsers.length} Registered Investors
+                  </span>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Search User (Phone / Name / Ref Code)</label>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search investor..."
+                        value={pmSearchQuery}
+                        onChange={(e) => setPmSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Choose Target Investor</label>
+                    <select
+                      value={pmTargetUserUid}
+                      onChange={(e) => setPmTargetUserUid(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">-- Select Investor --</option>
+                      {(allUsers || [])
+                        .filter(u => {
+                          if (!u) return false;
+                          if (!pmSearchQuery.trim()) return true;
+                          const q = pmSearchQuery.toLowerCase();
+                          return (
+                            String(u.phone || "").toLowerCase().includes(q) ||
+                            String(u.fullName || "").toLowerCase().includes(q) ||
+                            String(u.referralCode || "").toLowerCase().includes(q)
+                          );
+                        })
+                        .map(u => (
+                          <option key={u.uid} value={u.uid}>
+                            {u.phone} ({u.fullName || "No Name"}) — Tier: {u.currentTierId || "None"} | Bal: ₦{(u.balance || 0).toLocaleString()}
+                          </option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                </div>
+
+                {pmTargetUserUid && (() => {
+                  const targetUser = allUsers.find(u => u.uid === pmTargetUserUid);
+                  if (!targetUser) return null;
+                  return (
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs font-mono grid grid-cols-2 sm:grid-cols-4 gap-2 text-purple-950 mt-2">
+                      <div><span className="text-purple-600 text-[10px] block font-bold">Investor Phone:</span> <strong>{targetUser.phone}</strong></div>
+                      <div><span className="text-purple-600 text-[10px] block font-bold">Full Name:</span> <strong>{targetUser.fullName || "N/A"}</strong></div>
+                      <div><span className="text-purple-600 text-[10px] block font-bold">Current Tier ID:</span> <strong className="text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">{targetUser.currentTierId || "t1"}</strong></div>
+                      <div><span className="text-purple-600 text-[10px] block font-bold">Wallet Balance:</span> <strong className="text-emerald-700">₦{(targetUser.balance || 0).toLocaleString()}</strong></div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Step 2: Choose Product Plan or Custom Product ID */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Box className="w-4 h-4 text-purple-600" />
+                    <span>2. Select Investment Tier / Product ID</span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={pmIsCustomProduct}
+                        onChange={(e) => setPmIsCustomProduct(e.target.checked)}
+                        className="rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      <span>Specify Custom Product ID</span>
+                    </label>
+                  </div>
+                </div>
+
+                {!pmIsCustomProduct ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {allTiers.map((tier) => {
+                      const isSelected = pmSelectedPlanId === tier.id;
+                      return (
+                        <div
+                          key={tier.id}
+                          onClick={() => setPmSelectedPlanId(tier.id)}
+                          className={`p-3.5 rounded-2xl border transition cursor-pointer relative ${
+                            isSelected 
+                              ? "bg-purple-50/90 border-purple-500 ring-2 ring-purple-400 shadow-xs" 
+                              : "bg-white border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          {isSelected && (
+                            <span className="absolute top-2.5 right-2.5 bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                              Selected
+                            </span>
+                          )}
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">
+                                {tier.id}
+                              </span>
+                              <h4 className="text-xs font-black text-slate-900">{tier.name}</h4>
+                            </div>
+                            <div className="text-xs font-mono font-bold text-slate-900 pt-1">
+                              Price: ₦{tier.price.toLocaleString()}
+                            </div>
+                            <div className="text-[11px] font-mono text-emerald-600">
+                              Daily Return: ₦{tier.dailyReward.toLocaleString()}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500">
+                              100-Day Yield: ₦{(tier.dailyReward * 100).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-white rounded-2xl border border-purple-200 space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Custom Product ID (e.g. t8, custom_vip_1)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. t8, custom_vip, fund_3"
+                          value={pmCustomProductId}
+                          onChange={(e) => setPmCustomProductId(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Custom Product Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Coca-Cola Executive Bottling Reserve"
+                          value={pmCustomProductName}
+                          onChange={(e) => setPmCustomProductName(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Product Price (₦)</label>
+                        <input
+                          type="number"
+                          value={pmCustomPrice}
+                          onChange={(e) => setPmCustomPrice(Number(e.target.value))}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">Daily Return Amount (₦)</label>
+                        <input
+                          type="number"
+                          value={pmCustomDailyReward}
+                          onChange={(e) => setPmCustomDailyReward(Number(e.target.value))}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-emerald-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 3: Assignment Settings */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Settings className="w-4 h-4 text-purple-600" />
+                  <span>3. Assignment & Financial Terms</span>
+                </label>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pmChargeBalance}
+                        onChange={(e) => setPmChargeBalance(e.target.checked)}
+                        className="rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="text-xs font-extrabold text-slate-900">Charge Investor Wallet Balance</span>
+                    </label>
+                    <p className="text-[10px] text-slate-500">
+                      {pmChargeBalance 
+                        ? "Deducts the product price from the investor's wallet balance." 
+                        : "Grants product for FREE as promotional / admin privilege without balance deduction."}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Cycle Duration (Days)</label>
+                    <input
+                      type="number"
+                      value={pmCustomCycleDays}
+                      onChange={(e) => setPmCustomCycleDays(Number(e.target.value))}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-black text-xs sm:text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2 transition cursor-pointer border border-purple-400/30"
+              >
+                <Zap className="w-4 h-4 text-amber-300 fill-current" />
+                <span>ASSIGN PRODUCT TO USER WITH IMMEDIATE EFFECT</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Card 2: Investor Product Assignments Roster */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Investor Active Products & Tiers Roster</h3>
+                <p className="text-xs text-slate-500">Overview of active products assigned to investors</p>
+              </div>
+
+              <div className="w-full sm:w-64">
+                <input
+                  type="text"
+                  placeholder="Filter roster by phone or tier..."
+                  value={pmSearchQuery}
+                  onChange={(e) => setPmSearchQuery(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono text-slate-500 uppercase">
+                    <th className="p-3">Investor</th>
+                    <th className="p-3">Assigned Tier ID</th>
+                    <th className="p-3">Matched Plan Name</th>
+                    <th className="p-3">Wallet Balance</th>
+                    <th className="p-3">Total Deposit Vol</th>
+                    <th className="p-3 text-right">Quick Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {(allUsers || [])
+                    .filter(u => {
+                      if (!u) return false;
+                      if (!pmSearchQuery.trim()) return true;
+                      const q = pmSearchQuery.toLowerCase();
+                      return (
+                        String(u.phone || "").toLowerCase().includes(q) ||
+                        String(u.fullName || "").toLowerCase().includes(q) ||
+                        String(u.currentTierId || "").toLowerCase().includes(q)
+                      );
+                    })
+                    .map(u => {
+                      const matchedPlan = (allTiers || []).find(t => t && t.id === u.currentTierId);
+                      return (
+                        <tr key={u.uid} className="hover:bg-slate-50/80">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900 font-mono">{u.phone}</div>
+                            <div className="text-[10px] text-slate-400">{u.fullName || "Investor Profile"}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="bg-purple-100 text-purple-800 text-xs font-mono font-bold px-2 py-0.5 rounded">
+                              {u.currentTierId || "t1"}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800">
+                            {matchedPlan ? matchedPlan.name : `Product (${u.currentTierId || "t1"})`}
+                          </td>
+                          <td className="p-3 font-mono font-bold text-emerald-600">
+                            ₦{(u.balance || 0).toLocaleString()}
+                          </td>
+                          <td className="p-3 font-mono text-slate-600">
+                            ₦{(u.totalDeposit || 0).toLocaleString()}
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => {
+                                setPmTargetUserUid(u.uid);
+                                window.scrollTo({ top: 300, behavior: "smooth" });
+                              }}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer border border-purple-200 inline-flex items-center gap-1"
+                            >
+                              <Box className="w-3.5 h-3.5" />
+                              <span>Reassign Product</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
