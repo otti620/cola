@@ -155,13 +155,19 @@ export default function MineTab({ user, onUpdateUser, onLogout, activeView: prop
     }
 
     const transRef = collection(db, "users", targetUid, "transactions");
-    const q = query(transRef, orderBy("timestamp", "desc"));
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(transRef, (snapshot) => {
       const txs = snapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as TransactionRecord[];
+
+      txs.sort((a, b) => {
+        const timeA = (a as any).createdAt?.toDate ? (a as any).createdAt.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+        const timeB = (b as any).createdAt?.toDate ? (b as any).createdAt.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+        return timeB - timeA;
+      });
+
       setTransactions(txs);
       localStorage.setItem(`user_txs_${targetUid}`, JSON.stringify(txs));
       setTxLoading(false);

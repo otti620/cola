@@ -280,7 +280,7 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
 
         const transRef = collection(db, "users", uid, "transactions");
         await addDoc(transRef, {
-          type: "withdrawal",
+          type: "withdraw",
           amount: amt,
           fee: feeAmount,
           netPayout,
@@ -291,8 +291,9 @@ export default function WithdrawView({ user, onBack, onUpdateUser, onSuccess, on
           bankName: user.bankName || "",
           bankAccount: user.bankAccount || "",
           accountHolder: user.fullName || "",
+          userUid: uid,
           userPhone: user.phone || "",
-          userFullName: user.fullName || "",
+          userFullName: user.fullName || "Investor Partner",
           createdAt: serverTimestamp()
         });
 

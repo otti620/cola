@@ -228,61 +228,91 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
     };
   }, [user.uid]);
 
-  // Real-time Firestore Transactions Listener using collectionGroup (Single Query, no re-subscription loop)
+  // Real-time Firestore Transactions Listener using collectionGroup with user subcollection fallback sync
   useEffect(() => {
     if (!user || !user.uid) return;
 
     let unsubTxs: (() => void) | null = null;
-    try {
-      const q = query(collectionGroup(db, "transactions"), limit(150));
-      unsubTxs = onSnapshot(q, (snap) => {
-        const txList: any[] = [];
-        snap.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          const parentUid = docSnap.ref.parent.parent?.id || data.userId || data.userUid;
-          const matchingUser = allUsers.find(u => u.uid === parentUid || u.phone === data.userPhone);
-          
-          const txObj = {
-            ...data,
-            id: docSnap.id,
-            userUid: parentUid || data.userUid || "",
-            userPhone: data.userPhone || matchingUser?.phone || "Unknown Phone",
-            userFullName: data.userFullName || matchingUser?.fullName || "Investor Partner"
-          };
-          txList.push(txObj);
+    let isCancelled = false;
 
-          if (data.status === "pending") {
-            if (!isInitialLoadRef.current && !notifiedTxIdsRef.current.has(docSnap.id)) {
-              notifiedTxIdsRef.current.add(docSnap.id);
-              const txType = data.type === "deposit" ? "DEPOSIT" : "WITHDRAWAL";
-              const amountFormatted = `₦${Number(data.amount || 0).toLocaleString()}`;
-              sendBrowserNotification(
-                `⚠️ Action Required: ${txType} Request`,
-                `${txObj.userPhone} (${txObj.userFullName}) requested ${amountFormatted}. Click to approve.`
-              );
-            } else {
-              notifiedTxIdsRef.current.add(docSnap.id);
-            }
+    const processSnapshotDocs = (docs: any[]) => {
+      const txList: any[] = [];
+      const seenIds = new Set<string>();
+
+      docs.forEach((docSnap) => {
+        const data = docSnap.data ? docSnap.data() : docSnap;
+        const docId = docSnap.id || data.id;
+        if (!docId || seenIds.has(docId)) return;
+        seenIds.add(docId);
+
+        const parentUid = docSnap.ref?.parent?.parent?.id || data.userUid || data.userId;
+        const matchingUser = (allUsers || []).find(u => u && (u.uid === parentUid || u.phone === data.userPhone || u.uid === data.userUid));
+
+        const txObj = {
+          ...data,
+          id: docId,
+          userUid: parentUid || data.userUid || matchingUser?.uid || "",
+          userPhone: data.userPhone || matchingUser?.phone || "Unknown Phone",
+          userFullName: data.userFullName || matchingUser?.fullName || "Investor Partner"
+        };
+        txList.push(txObj);
+
+        if (data.status === "pending") {
+          if (!isInitialLoadRef.current && !notifiedTxIdsRef.current.has(docId)) {
+            notifiedTxIdsRef.current.add(docId);
+            const txType = (data.type === "deposit") ? "DEPOSIT" : "WITHDRAWAL";
+            const amountFormatted = `₦${Number(data.amount || 0).toLocaleString()}`;
+            sendBrowserNotification(
+              `⚠️ Action Required: ${txType} Request`,
+              `${txObj.userPhone} (${txObj.userFullName}) requested ${amountFormatted}. Click to approve.`
+            );
+          } else {
+            notifiedTxIdsRef.current.add(docId);
           }
-        });
+        }
+      });
 
-        // Client-side sort by newest
-        const sorted = txList.sort((a, b) => {
-          const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
-          const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
-          return timeB - timeA;
-        });
+      // Client-side sort by newest
+      const sorted = txList.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+        return timeB - timeA;
+      });
 
+      if (!isCancelled) {
         setPendingTxs(sorted);
         localStorage.setItem("careem_invest_all_txs", JSON.stringify(sorted));
-      }, (err) => {
-        console.warn("Transactions snapshot notice (using cached transactions):", err?.message || err);
+      }
+    };
+
+    try {
+      const q = query(collectionGroup(db, "transactions"), limit(250));
+      unsubTxs = onSnapshot(q, (snap) => {
+        processSnapshotDocs(snap.docs);
+      }, async (err) => {
+        console.warn("Transactions collectionGroup snapshot notice, scanning user subcollections...", err?.message || err);
+        // Fallback: Scan allUsers subcollections directly for pending transactions
+        if (allUsers && allUsers.length > 0) {
+          try {
+            const fallbackTxs: any[] = [];
+            for (const u of allUsers) {
+              if (!u.uid) continue;
+              const userTxCol = collection(db, "users", u.uid, "transactions");
+              const uSnap = await getDocs(userTxCol);
+              uSnap.docs.forEach(d => fallbackTxs.push(d));
+            }
+            processSnapshotDocs(fallbackTxs);
+          } catch (e) {
+            console.warn("Fallback tx scan error:", e);
+          }
+        }
       });
     } catch (err) {
       console.warn("Transactions query subscription error:", err);
     }
 
     return () => {
+      isCancelled = true;
       if (unsubTxs) unsubTxs();
     };
   }, [user.uid, allUsers.length]);
@@ -391,7 +421,7 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
       const txRef = doc(db, "users", tx.userUid, "transactions", tx.id);
       await updateDoc(txRef, { status: "declined" });
 
-      if (tx.type === "withdraw") {
+      if (tx.type === "withdraw" || tx.type === "withdrawal") {
         const userRef = doc(db, "users", tx.userUid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
@@ -712,7 +742,8 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
 
   const filteredApprovalsList = (pendingTxs || []).filter(tx => {
     if (!tx) return false;
-    if (approvalFilter !== "all" && tx.type !== approvalFilter) return false;
+    const txTypeNormalized = (tx.type === "withdrawal") ? "withdraw" : tx.type;
+    if (approvalFilter !== "all" && txTypeNormalized !== approvalFilter) return false;
     if (approvalStatusFilter !== "all" && tx.status !== approvalStatusFilter) return false;
     return true;
   });
@@ -720,7 +751,7 @@ export default function AdminPanel({ user, onUpdateUser, onNavigateToTab }: Admi
   // Calculate totals for KPIs
   const totalUserBalances = (allUsers || []).reduce((acc, u) => acc + (u?.balance || 0), 0);
   const pendingDepositsCount = (pendingTxs || []).filter(t => t && t.status === "pending" && t.type === "deposit").length;
-  const pendingWithdrawalsCount = (pendingTxs || []).filter(t => t && t.status === "pending" && t.type === "withdraw").length;
+  const pendingWithdrawalsCount = (pendingTxs || []).filter(t => t && t.status === "pending" && (t.type === "withdraw" || t.type === "withdrawal")).length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20 px-3 sm:px-6 font-sans">

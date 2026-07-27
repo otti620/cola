@@ -52,7 +52,7 @@ export interface CareemTask {
 
 export interface TransactionRecord {
   id: string;
-  type: "deposit" | "withdraw";
+  type: "deposit" | "withdraw" | "withdrawal";
   amount: number;
   status: "pending" | "approved" | "rejected" | string;
   timestamp: string;

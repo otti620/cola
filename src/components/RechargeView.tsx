@@ -272,6 +272,9 @@ export default function RechargeView({ user, onBack, onSuccess, onUpdateUser }: 
             timestamp: new Date().toLocaleString("en-NG"),
             details: `Automated Transfer via ${bankAccountInfo.bankName} (Ref: ${checkoutRef})`,
             behaviorAnalysis,
+            userUid: uid,
+            userPhone: user.phone || "",
+            userFullName: user.fullName || "Investor Partner",
             createdAt: serverTimestamp()
           });
         }

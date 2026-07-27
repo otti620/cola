@@ -90,6 +90,8 @@ export default function TransactionHistoryView({
 
   const filteredTransactions = transactions.filter((t) => {
     if (filter === "all") return true;
+    const isW = t.type === "withdraw" || t.type === "withdrawal";
+    if (filter === "withdraw") return isW;
     return t.type === filter;
   });
 
@@ -98,11 +100,11 @@ export default function TransactionHistoryView({
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const totalWithdrawals = transactions
-    .filter((t) => t.type === "withdraw" && t.status !== "rejected" && t.status !== "declined")
+    .filter((t) => (t.type === "withdraw" || t.type === "withdrawal") && t.status !== "rejected" && t.status !== "declined")
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const pendingWithdrawals = transactions.filter(
-    (t) => t.type === "withdraw" && (t.status || "").toLowerCase() === "pending"
+    (t) => (t.type === "withdraw" || t.type === "withdrawal") && (t.status || "").toLowerCase() === "pending"
   );
 
   const getStatusBadge = (status: string) => {
@@ -171,7 +173,7 @@ export default function TransactionHistoryView({
             ₦{totalWithdrawals.toLocaleString()}
           </div>
           <div className="text-[10px] text-rose-600 font-medium">
-            {transactions.filter(t => t.type === "withdraw").length} withdrawal records
+            {transactions.filter(t => t.type === "withdraw" || t.type === "withdrawal").length} withdrawal records
           </div>
         </div>
       </div>
@@ -259,7 +261,7 @@ export default function TransactionHistoryView({
               : "text-gray-500 hover:text-gray-800"
           }`}
         >
-          Withdrawals ({transactions.filter(t => t.type === "withdraw").length})
+          Withdrawals ({transactions.filter(t => t.type === "withdraw" || t.type === "withdrawal").length})
         </button>
       </div>
 
